@@ -1,0 +1,18 @@
+---
+title: "Untitled"
+format: pdf
+---
+
+```{r}
+library(rtracklayer)
+```
+
+Comparison to Lads
+
+```{r}
+restbw <- import.bw("Jurkat Lamin DAmID RGSE94971_sq77.dpn_smooth_60_R.bw")
+```
+```{r}
+df <- as.data.frame(restbw)
+df
+```
