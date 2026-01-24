@@ -1,18 +1,78 @@
 ---
-title: "Untitled"
-format: pdf
+title: "Lads"
+output: pdf_document
 ---
 
-```{r}
-library(rtracklayer)
+```{r setup,echo=F, message=FALSE, warning=FALSE}
+library(rtracklayer) # for loading .bw files
+library(data.table)
+library(ggplot2)
+    library(gridExtra)
+
+library(stats)
+library(mixtools)  # jesus all this for bimodal middle estimation.....
 ```
 
-Comparison to Lads
+Comparison of Nup62KO integrations to Lads
 
-```{r}
+```{r, echo = F}
+#Load data
 restbw <- import.bw("Jurkat Lamin DAmID RGSE94971_sq77.dpn_smooth_60_R.bw")
+actbw <- import.bw("Jurkat Lamin Dam ID A GSE94971_sq77.dpn_smooth_60_A.bw")
+df_rest <- as.data.frame(restbw)
+df_act <- as.data.frame(actbw)
+#Load Nup data as well
+nups <- read.csv("C:/Users/38598/Desktop/hivint/nup153/Nup_62_2/Nup_all_peaks_together.csv")
+nups <- nups[,-1]
+
+# load the random integration data as well at some point
 ```
+
+Note: DamID peak score threshold for lamin data simply chosen by looking for bimodality in score distribution (0.3 and 0.4 for restin and activated respectively):
+```{r,include = F}
+r = density(df_rest$score, bw = 0.01)
+a = density(df_act$score,bw = 0.01)
+inr <- which(diff(sign(diff(r$y))) == 2) + 1
+ina <- which(diff(sign(diff(a$y))) == 2) + 1
+
+r_min <- r$y[inr]
+a_min <- a$y[ina]
+r_min
+a_min
+
+# convert to df for adding to diagnostic plot
+denr <- data.frame(x = r$x, y = r$y)
+dena <- data.frame(x = a$x, y = a$y)
+plot(r)
+abline(v = midpoint,col = "red")
+
+fit <- normalmixEM(r$x, k = 2)
+midpoint <- mean(fit$mu) 
+
+fit2 <- normalmixEM(a$x, k = 2)
+midpoint2 <- mean(fit2$mu) 
+```
+```{r, echo = F}
+bin = 0.5
+
+pr <- ggplot(df_rest, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Resting Lamin DamID")+
+   # geom_line(data = denr, aes(x = x, y = y *length(x) * bin),
+   #         color = "blue")+
+    geom_vline(xintercept=midpoint, col = "red")#+
+    #geom_vline(xintercept=r_min[36], col = "blue")
+pa <- ggplot(df_act, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Activated Lamin DamID")+
+    #geom_line(data = dena, aes(x = x, y *length(x) * bin),
+    #        color = "blue")+
+    geom_vline(xintercept=midpoint2, col = "red")#+
+    #geom_vline(xintercept=a_min[2], col = "blue")#+
+    #geom_vline(xintercept=a_min[3], col = "orange")
+
+grid.arrange(pa, pr, ncol=2)
+```
+
+
+Exact overlaps for all Lads and all Nup62KO integrations
+
 ```{r}
-df <- as.data.frame(restbw)
-df
+
 ```
