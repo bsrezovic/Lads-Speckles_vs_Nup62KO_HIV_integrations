@@ -8,9 +8,10 @@ library(rtracklayer) # for loading .bw files
 library(data.table)
 library(ggplot2)
     library(gridExtra)
-
+library(dplyr)
 library(stats)
 library(mixtools)  # jesus all this for bimodal middle estimation.....
+library(DNAcopy)
 ```
 
 Comparison of Nup62KO integrations to Lads
@@ -28,39 +29,17 @@ nups <- nups[,-1]
 # load the random integration data as well at some point
 ```
 
-Note: DamID peak score threshold for lamin data simply chosen by looking for bimodality in score distribution (0.3 and 0.4 for restin and activated respectively):
-```{r,include = F}
-r = density(df_rest$score, bw = 0.01)
-a = density(df_act$score,bw = 0.01)
-inr <- which(diff(sign(diff(r$y))) == 2) + 1
-ina <- which(diff(sign(diff(a$y))) == 2) + 1
+Note: DamID lads data is raw (only short outliers seem to be filtered out, with background left in). I re-called the peaks using the same method mentioned in the paper (circualr binary segmentation).
 
-r_min <- r$y[inr]
-a_min <- a$y[ina]
-r_min
-a_min
-
-# convert to df for adding to diagnostic plot
-denr <- data.frame(x = r$x, y = r$y)
-dena <- data.frame(x = a$x, y = a$y)
-plot(r)
-abline(v = midpoint,col = "red")
-
-fit <- normalmixEM(r$x, k = 2)
-midpoint <- mean(fit$mu) 
-
-fit2 <- normalmixEM(a$x, k = 2)
-midpoint2 <- mean(fit2$mu) 
-```
 ```{r, echo = F}
 bin = 0.5
 
-pr <- ggplot(df_rest, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Resting Lamin DamID")+
+pr <- ggplot(df_rest, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Resting Lamin DamID scores")+
    # geom_line(data = denr, aes(x = x, y = y *length(x) * bin),
    #         color = "blue")+
     geom_vline(xintercept=midpoint, col = "red")#+
     #geom_vline(xintercept=r_min[36], col = "blue")
-pa <- ggplot(df_act, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Activated Lamin DamID")+
+pa <- ggplot(df_act, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Activated Lamin DamID scores")+
     #geom_line(data = dena, aes(x = x, y *length(x) * bin),
     #        color = "blue")+
     geom_vline(xintercept=midpoint2, col = "red")#+
@@ -70,7 +49,91 @@ pa <- ggplot(df_act, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+
 grid.arrange(pa, pr, ncol=2)
 ```
 
+```{r, echo = F}
+# tunning the DNA copy method
+df_act <- as.data.table(df_act)
+df_rest <- as.data.table(df_rest)
 
+cna.object <- CNA(
+  genomdat = df2$score,
+  chrom    = df2$seqnames,
+  maploc   = df2$mid,
+  data.type= "logratio"
+)
+smoothed <- smooth.CNA(cna.object) # this does nothing since its already smooth i think
+
+seg.results <- segment(
+  smoothed,
+  weights = df2$width,
+  verbose = 1
+)
+segments.df <- seg.results$output
+```
+
+Example plot of score distribution on chromosomes and called LADs (by me)
+
+```{r,echo = FALSE}
+
+df2 <- df_act[seqnames %in% c("chr15"),]%>%
+      mutate(mid = (start + end) / 2)
+dfg <- segments.df[segments.df$seg.mean >=1,]
+dfb <- segments.df[segments.df$seg.mean <=-2,]
+
+ggplot(df2§, aes(x = mid, y = 0, xend = mid, yend = score)) +
+ geom_segment(color = "steelblue", alpha = 0.6) +
+ # segemnts that ae def not LADS
+ geom_segment(
+    data = dfb,
+    aes(
+      x    = loc.start,
+      xend = loc.end,
+      y    = - 4.3,     # lower the bar slightly
+      yend = - 4.4      # same y for horizontal
+    ),
+    color = "darkred",
+    size  = 2
+ )+
+    # probably lads?
+ geom_segment(
+data = dfg,
+  aes(
+        x  = loc.start,
+        xend  = loc.end,
+        y = -4.2,
+       yend=-4.3),
+       color = "green",size = 2) +
+     facet_wrap(~ seqnames, scales = "free_x") +
+    labs(x = "Genomic coordinate (bp)", y = "Score") +
+    theme_minimal()+
+    geom_point(
+    aes(x = Inf, y = Inf, color = "Raw score"),
+    show.legend = TRUE
+  ) +
+  geom_point(
+    aes(x = Inf, y = Inf, color = "LADs"),
+    show.legend = TRUE
+  ) +
+    geom_point(
+    aes(x = Inf, y = Inf, color = "Not LADs"),
+    show.legend = TRUE
+  ) +
+scale_color_manual(
+    name   = "",
+    values = c(
+      "Raw score"     = "steelblue",
+      "LADs"  = "green",
+      "Not LADs" = "darkred"
+    )
+  ) 
+```
+
+```{r}
+dfg <- as.data.table(dfg)
+dfb <- as.data.table(dfb)
+setkey(dfb, loc.start,loc.end)
+setkey(dfg, loc.start,loc.end)
+foverlaps(dfb,dfg)  #so its just visual problem?
+```
 Exact overlaps for all Lads and all Nup62KO integrations
 
 ```{r}
