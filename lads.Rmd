@@ -12,9 +12,11 @@ library(dplyr)
 library(stats)
 library(mixtools)  # jesus all this for bimodal middle estimation.....
 library(DNAcopy)
+library(GenomicRanges)
+library(biomaRt)
 ```
 
-Comparison of Nup62KO integrations to Lads
+## Comparison of Nup62KO integrations to Lads
 
 ```{r, echo = F}
 #Load data
@@ -29,20 +31,20 @@ nups <- nups[,-1]
 # load the random integration data as well at some point
 ```
 
-Note: DamID lads data is raw (only short outliers seem to be filtered out, with background left in). I re-called the peaks using the same method mentioned in the paper (circualr binary segmentation).
+Note: DamID lads data is raw (only short outliers seem to be filtered out, with background left in). I re-called the peaks using the same method mentioned in the paper (circualar binary segmentation instead of the hidden markov model that I usally use provided by Maja).
 
 ```{r, echo = F}
 bin = 0.5
 
-pr <- ggplot(df_rest, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Resting Lamin DamID scores")+
+pr <- ggplot(df_rest, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Resting Lamin DamID scores")
    # geom_line(data = denr, aes(x = x, y = y *length(x) * bin),
    #         color = "blue")+
-    geom_vline(xintercept=midpoint, col = "red")#+
+   # geom_vline(xintercept=midpoint, col = "red")#+
     #geom_vline(xintercept=r_min[36], col = "blue")
-pa <- ggplot(df_act, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Activated Lamin DamID scores")+
+pa <- ggplot(df_act, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+theme_minimal()+ggtitle("Activated Lamin DamID scores")
     #geom_line(data = dena, aes(x = x, y *length(x) * bin),
     #        color = "blue")+
-    geom_vline(xintercept=midpoint2, col = "red")#+
+    #geom_vline(xintercept=midpoint2, col = "red")#+
     #geom_vline(xintercept=a_min[2], col = "blue")#+
     #geom_vline(xintercept=a_min[3], col = "orange")
 
@@ -54,6 +56,15 @@ grid.arrange(pa, pr, ncol=2)
 df_act <- as.data.table(df_act)
 df_rest <- as.data.table(df_rest)
 
+df_act<- df_act%>%
+      mutate(mid = (start + end) / 2)
+
+df_rest<- df_rest%>%
+      mutate(mid = (start + end) / 2)
+df_act <- as.data.table(df_act)
+df_rest <- as.data.table(df_rest)
+df2 <- df_act[seqnames %in% c("chr15"),]%>%
+      mutate(mid = (start + end) / 2)
 cna.object <- CNA(
   genomdat = df2$score,
   chrom    = df2$seqnames,
@@ -68,74 +79,159 @@ seg.results <- segment(
   verbose = 1
 )
 segments.df <- seg.results$output
+
+# this should be a perfect segmentation: check for voerlaps just to be sure:
+gr <- GRanges(
+  seqnames = segments.df$chrom,
+  ranges   = IRanges(start = segments.df$loc.start, end = segments.df$loc.end)
+)
+
+any(countOverlaps(gr, gr) > 1)  # yay no overlaps, so i guees any overlaps are visual bug/plot error
+
+
+#thresholds
+high_thresh <- quantile(segments.df$seg.mean, 0.575)          # top 5% signal
+low_thresh  <- -2 #quantile(segments.df$seg.mean, 0.05)  
 ```
 
-Example plot of score distribution on chromosomes and called LADs (by me)
+Example plot of score distribution on chromosomes and called LADs (by me).
+Paper doesent state exact parameters used, I presumed defaults for the peak calling weighted by fragment width and then varied the threshold until I got 18,6% of genes (around 3700 in resting and activated) classifed as overlapping LADs as they have in the paper (for the numbers to match this have to be protein coding genes only. Additionaly they say its genes "within" LADs but the only way to get 18.6% and 3700 at the same time is to count any overlap between genes and LADs). I also marked segements with segemntation lower than -2 (meaning much higher Dam signal compared to Dam-fusion).
 
 ```{r,echo = FALSE}
 
-df2 <- df_act[seqnames %in% c("chr15"),]%>%
-      mutate(mid = (start + end) / 2)
-dfg <- segments.df[segments.df$seg.mean >=1,]
-dfb <- segments.df[segments.df$seg.mean <=-2,]
 
-ggplot(df2§, aes(x = mid, y = 0, xend = mid, yend = score)) +
- geom_segment(color = "steelblue", alpha = 0.6) +
- # segemnts that ae def not LADS
- geom_segment(
-    data = dfb,
-    aes(
-      x    = loc.start,
-      xend = loc.end,
-      y    = - 4.3,     # lower the bar slightly
-      yend = - 4.4      # same y for horizontal
-    ),
-    color = "darkred",
-    size  = 2
- )+
-    # probably lads?
- geom_segment(
-data = dfg,
-  aes(
-        x  = loc.start,
-        xend  = loc.end,
-        y = -4.2,
-       yend=-4.3),
-       color = "green",size = 2) +
-     facet_wrap(~ seqnames, scales = "free_x") +
-    labs(x = "Genomic coordinate (bp)", y = "Score") +
-    theme_minimal()+
-    geom_point(
-    aes(x = Inf, y = Inf, color = "Raw score"),
-    show.legend = TRUE
-  ) +
-  geom_point(
-    aes(x = Inf, y = Inf, color = "LADs"),
-    show.legend = TRUE
-  ) +
-    geom_point(
-    aes(x = Inf, y = Inf, color = "Not LADs"),
-    show.legend = TRUE
-  ) +
-scale_color_manual(
-    name   = "",
-    values = c(
-      "Raw score"     = "steelblue",
-      "LADs"  = "green",
-      "Not LADs" = "darkred"
+dfg <- segments.df[segments.df$seg.mean >=high_thresh,]
+dfb <- segments.df[segments.df$seg.mean <=low_thresh,]
+
+ggplot(df2, aes(x = mid, y = 0, xend = mid, yend = score)) +
+     geom_segment(color = "steelblue", alpha = 0.6) +
+              # segemnts that ae def not LADS
+                            geom_segment(
+                                                   data = dfb,
+                                                                                       aes(
+                                                                                         x    = loc.start,
+                                                                                           xend = loc.end,
+                                                                                                     y    = - 4.3,     # lower the bar slightly
+                                                                                                               yend = - 4.4      # same y for horizontal
+                                                                                                                         ), color = "darkred"
+                                                                                                                          )+
+                                                                                                                           # probably lads?
+                                                                                                                              geom_segment(
+                                                                                                                                  data = dfg,
+                                                                                                                                   aes(
+                                                                                                                                     x  = loc.start,
+                                                                                                                                     xend  = loc.end,
+                                                                                                                                      y = -4.2,
+                                                                                                                                      yend=-4.3),
+                                                                                                                                       color = "green") +
+                                                                                                                                        facet_wrap(~ seqnames, scales = "free_x") +
+                                                                                                                                         labs(x = "Genomic coordinate (bp)", y = "Score") +
+                                                                                                                                         theme_minimal()+
+                                                                                                                                          geom_point(
+                                                                                                                                          aes(x = Inf, y = Inf, color = "Raw score"),
+                                                                                                                                          show.legend = TRUE
+                                                                                                                                           ) +
+                                                                                                                                           geom_point(
+                                                                                                                                           aes(x = Inf, y = Inf, color = "LADs"),
+                                                                                                                                           show.legend = TRUE
+                                                                                                                                            ) +
+                                                                                                                                             geom_point(
+                                                                                                                                              aes(x = Inf, y = Inf, color = "Not LADs"),
+                                                                                                                                              show.legend = TRUE
+                                                                                                                                              ) +
+                                                                                                                                               scale_color_manual(
+                                                                                                                                                name   = "",
+                                                                                                                                                 values = c(
+                                                                                                                                                 "Raw score"     = "steelblue",
+                                                                                                                                                  "LADs"  = "green",
+                                                                                                                                                   "Not LADs" = "darkred"
+                                                                                                                                                    ))+ggtitle("Chr 15")+xlab("")+ylab("log2(Lamin fusion/Dam)")
+```
+
+```{r, echo = FALSE, eval = FALSE}
+# this just shouldnt run in rmarkdwon as its too long and just run in 
+# Ok lets see if the computer can handle actually segmentating the whole thing twice or is this
+# a server problem...
+segmentator <- function(df2){
+    cna.object <- CNA(
+      genomdat = df2$score,
+      chrom    = df2$seqnames,
+      maploc   = df2$mid,
+      data.type= "logratio"
     )
-  ) 
+    smoothed <- smooth.CNA(cna.object) # this does nothing since its already smooth i think
+
+    seg.results <- segment(
+      smoothed,
+      weights = df2$width,
+      verbose = 1
+     )
+    segments.df <- seg.results$output
+    return(segments.df)
+}
+
+seg_r <- segmentator(df_act)
+seg_a <- segmentator(df_rest)
+
+saveRDS(list(seg_a,seg_r),"Segments_list.rds")
 ```
 
-```{r}
-dfg <- as.data.table(dfg)
-dfb <- as.data.table(dfb)
-setkey(dfb, loc.start,loc.end)
-setkey(dfg, loc.start,loc.end)
-foverlaps(dfb,dfg)  #so its just visual problem?
-```
+
 Exact overlaps for all Lads and all Nup62KO integrations
 
-```{r}
+```{r, echo = FALSE}
+# load in the above prepared segmented 
+seg_list <- readRDS("Segments_list.rds")
+seg_a <- seg_list[1]
+seg_r <- seg_list[2]
+seg_a <- as.data.table(seg_a)
+seg_r <- as.data.table(seg_r)
+rm(seg_list)
+
+# Match LADS to genes until you get 18.6% of genes in lads,
+# then apply same thinking to determining non lad-ness
+# if it turns out the best approach isnt just a vertical line down the
+# centre of the bimodal distribution
+mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host    = 'grch37.ensembl.org')
+atts <- c("ensembl_gene_id", "chromosome_name", "start_position", 
+          "end_position")
+genes <- getBM(attributes = atts, mart = mart,filters = c("transcript_biotype"),
+                                                values=c("protein_coding"))
+genes <- as.data.table(genes)
+chrnames <- paste0("chr",c(c(1:22),"X","Y"))
+genes$chromosome_name <- paste0("chr",genes$chromosome_name)
+genes <- genes[chromosome_name%in% chrnames,]
+setkey(genes, chromosome_name,start_position,end_position )
+
+# simply runnign with all genes gives us 
+
+# calcualted thresholds
+high_thresh_a <- quantile(seg_a$seg.mean, 0.575)          # top 5% signal
+low_thresh_a  <- -2#quantile(seg_a$seg.mean, 0.05)  
+
+high_thresh_r <- quantile(seg_r$seg.mean, 0.61)          # top 5% signal
+low_thresh_r  <- -2#quantile(seg_r$seg.mean, 0.05)  
+
+#Mark and filter by this thresholds
+seg_a[,LAD:="Not classified"][seg.mean>=high_thresh_a,LAD:="LAD"][seg.mean<=low_thresh_a,LAD:="Not LAD"]
+
+seg_r[,LAD:="Not classified"][seg.mean>=high_thresh_r,LAD:="LAD"][seg.mean<=low_thresh_r,LAD:="Not LAD"]
+
+setkey(seg_a, chrom, loc.start, loc.end)
+setkey(seg_r, chrom, loc.start, loc.end)
+
+gcount <- length(unique(test1$ensembl_gene_id)) 
+# theres about 63k genes, some overlap boundries of any lads we make so 
+# im gonna go with any sort of overlapp and then see from there
+test1 <- foverlaps(genes,seg_a)
+num1 <- length(unique(test1[LAD=="LAD" & !is.na(ensembl_gene_id),]$ensembl_gene_id))
+num1
+num1/gcount*100
+
+test2 <- foverlaps(genes,seg_r)
+num2 <- length(unique(test2[LAD=="LAD" & !is.na(ensembl_gene_id),]$ensembl_gene_id))
+num2
+num2/gcount*100  # rough percentage of genes in lads
+
 
 ```
