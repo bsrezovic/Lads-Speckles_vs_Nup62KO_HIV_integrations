@@ -24,11 +24,7 @@ restbw <- import.bw("Jurkat Lamin DAmID RGSE94971_sq77.dpn_smooth_60_R.bw")
 actbw <- import.bw("Jurkat Lamin Dam ID A GSE94971_sq77.dpn_smooth_60_A.bw")
 df_rest <- as.data.frame(restbw)
 df_act <- as.data.frame(actbw)
-#Load Nup data as well
-nups <- read.csv("C:/Users/38598/Desktop/hivint/nup153/Nup_62_2/Nup_all_peaks_together.csv")
-nups <- nups[,-1]
 
-# load the random integration data as well at some point
 ```
 
 Note: DamID lads data is raw (only short outliers seem to be filtered out, with background left in). I re-called the peaks using the same method mentioned in the paper (circualar binary segmentation instead of the hidden markov model that I usally use provided by Maja).
@@ -95,7 +91,8 @@ low_thresh  <- -2 #quantile(segments.df$seg.mean, 0.05)
 ```
 
 Example plot of score distribution on chromosomes and called LADs (by me).
-Paper doesent state exact parameters used, I presumed defaults for the peak calling weighted by fragment width and then varied the threshold until I got 18,6% of genes (around 3700 in resting and activated) classifed as overlapping LADs as they have in the paper (for the numbers to match this have to be protein coding genes only. Additionaly they say its genes "within" LADs but the only way to get 18.6% and 3700 at the same time is to count any overlap between genes and LADs). I also marked segements with segemntation lower than -2 (meaning much higher Dam signal compared to Dam-fusion).
+Paper doesent state exact parameters used, I presumed defaults for the peak calling weighted by fragment width and then varied the threshold until I got 18,6% of genes (around 3700 in resting and activated) classifed as overlapping LADs as they have in the paper (for the numbers to match this have to be protein coding genes only. 
+Additionaly they say its genes "within" LADs but the only way to get 18.6% and 3700 at the same time is to count any overlap between genes and LADs). I also marked segements with segemntation lower than -2 (meaning much higher Dam signal compared to Dam-fusion).
 
 ```{r,echo = FALSE}
 
@@ -220,7 +217,7 @@ seg_r[,LAD:="Not classified"][seg.mean>=high_thresh_r,LAD:="LAD"][seg.mean<=low_
 setkey(seg_a, chrom, loc.start, loc.end)
 setkey(seg_r, chrom, loc.start, loc.end)
 
-gcount <- length(unique(test1$ensembl_gene_id)) 
+gcount <- length(unique(genes$ensembl_gene_id)) 
 # theres about 63k genes, some overlap boundries of any lads we make so 
 # im gonna go with any sort of overlapp and then see from there
 test1 <- foverlaps(genes,seg_a)
@@ -233,5 +230,162 @@ num2 <- length(unique(test2[LAD=="LAD" & !is.na(ensembl_gene_id),]$ensembl_gene_
 num2
 num2/gcount*100  # rough percentage of genes in lads
 
+seg_a[,LAD_binary:=ifelse(LAD == "LAD","LAD","not LAD")][,type := "Activated"]
+seg_r[,LAD_binary:=ifelse(LAD == "LAD","LAD","not LAD")][,type := "Resting"]
+
+lads <- rbind(seg_a,seg_r)
+rm(seg_a)
+rm(seg_r)
+```
+
+
+Overlaps between Nup 62KO integrations and LADs
+ 
+  Count and proportion plots with and without KO153
+```{r,echo = FALSE}
+#Load Nup data as well
+nups <- read.csv("C:/Users/38598/Desktop/hivint/nup153/Nup_62_2/Nup_all_peaks_together.csv")
+nups <- nups[,-1]
+nups <- as.data.table(nups)
+nups <- nups[!is.na(integration_start)]
+# load the random integration data as well at some point
+setkey(lads,chrom, loc.start,loc.end)
+setkey(nups,chr_name,integration_start,integration_end)
+
+over <- foverlaps(nups,lads)
+# just making things clear
+cos <- colnames(over)
+cos[9] <- "LAD_celltype"
+colnames(over) <- cos  
+
+# jsut keep the same ones
+over <- over[cellType == LAD_celltype,]
+```
+
+```{r,echo = FALSE}
+# Initial simple graphs
+
+# just the count (this is total, includes KO153)
+ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=cellType)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3) +
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+ggplot(over[!group%in%c("Resting_mock","Activated_mock"),]
+, aes(fill=LAD_binary, x=group)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3) +
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=LAD_binary, x=group)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3) +
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+#Add proportion plots
+
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=LAD_binary, x=group)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+ggplot(over[!group%in%c("Resting_mock","Activated_mock"),]
+, aes(fill=LAD_binary, x=group)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All integrations vs LADs")+
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+```
+
+Realtive insertion location plots for HIV integration within LADs.
+Semm relatively uniform
+
+```{r,echo = FALSE}
+over[,rel_pos:= (integration_start - loc.start)/(loc.end-loc.start)]
+
+
+ggplot(over[LAD =="LAD" & ! group %in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153")], 
+aes(x = rel_pos, fill = group)) +
+  geom_histogram(binwidth = 0.05, color = "white", boundary = 0) + # boundry deals with first bin artifacting
+  scale_fill_brewer(palette="Blues", direction = 1)+
+  labs(x = "Relative position inside LAD",
+       y = "Insertion count",
+       title = "Distribution of HIV KO62 insertions within LADS") +
+  theme_minimal()
+
+
+```
+
+Non_genic vs genic inside and outside LADs
+
+```{r}
+ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=isGenic)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3) +
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=isGenic)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+
+  # here add random matched controls into the mix, thus separating
+```
+
+Feature-anchored frequency plot? or whatever
+
+```{r}
+
+```
+
+Violin plots of expression for genic integrations
+    
+```{r}
+ggplot(over, aes(x = cellType, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
+  geom_violin(trim =T) +
+    labs(x = "Group", y = "Expression(log2 var norm count)",
+           title = "Expression distribution by group") +
+             theme_minimal()
+
+
+ggplot(over, aes(x = group, y = log2(variance_norm_counts+1),fill = group)) +
+  geom_violin(trim =T) +
+          labs(x = "Group", y = "Expression(log2 var norm count)",
+                                   title = "Expression distribution by sample") + facet_wrap(~cellType, scales = "free")+
+                                                   theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+                                                                      scale_x_discrete(drop = TRUE)+
+                                                                      scale_fill_brewer(palette="Blues", direction = 1)
+
+
+ggplot(over, aes(x = group, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
+  geom_violin(trim =T) +
+            labs(x = "Group", y = "Expression(log2 var norm count)",
+                                               title = "Expression distribution by sample and LAD") + facet_wrap(~cellType, scales = "free")+
+                                                                                                  theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+                                                                                                                                                                        scale_x_discrete(drop = TRUE)  +
+                                                                                                                                                                                                                                              scale_fill_brewer(palette="Blues", direction = 1)                                                                
+```
+
+Compare expression levels of non-integrating genes you have expression levels off!!!!!
+
+```{r}
+
+```
+
+Heatmaps relative to rloops etc..
+
+
+```{r}
 
 ```
