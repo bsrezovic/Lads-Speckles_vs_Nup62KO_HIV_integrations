@@ -14,6 +14,10 @@ library(mixtools)  # jesus all this for bimodal middle estimation.....
 library(DNAcopy)
 library(GenomicRanges)
 library(biomaRt)
+library(nullranges)
+library(regioneR)
+library(Biostrings)
+library(BSgenome.Hsapiens.UCSC.hg19)
 ```
 
 ## Comparison of Nup62KO integrations to Lads
@@ -241,7 +245,7 @@ rm(seg_r)
 
 Overlaps between Nup 62KO integrations and LADs
  
-  Count and proportion plots with and without KO153
+ 
 ```{r,echo = FALSE}
 #Load Nup data as well
 nups <- read.csv("C:/Users/38598/Desktop/hivint/nup153/Nup_62_2/Nup_all_peaks_together.csv")
@@ -251,7 +255,7 @@ nups <- nups[!is.na(integration_start)]
 # load the random integration data as well at some point
 setkey(lads,chrom, loc.start,loc.end)
 setkey(nups,chr_name,integration_start,integration_end)
-
+# complete overlp here, no integrations land in the spaces without LAD data
 over <- foverlaps(nups,lads)
 # just making things clear
 cos <- colnames(over)
@@ -260,7 +264,79 @@ colnames(over) <- cos
 
 # jsut keep the same ones
 over <- over[cellType == LAD_celltype,]
+
+# Add randm matched controls
+real_gr <- GRanges(seqnames = nups$chr_name,strand = nups$strand,
+                                ranges = IRanges(start = nups$integration_start,              
+                                                        end = nups$integration_end) )
+pool <- createRandomRegions(nregions = length(real_gr),
+                            genome = BSgenome.Hsapiens.UCSC.hg19)
+# lets try both completely random controls, and matched for GC and chromosome etc.
+# have to calculaet GC content for this
+focal_seq <- getSeq(BSgenome.Hsapiens.UCSC.hg19, real_gr)
+pool_seq  <- getSeq(BSgenome.Hsapiens.UCSC.hg19, pool)
+
+# Compute GC proportion
+        # without as numveric the ouput is a matrix, so thats why thats there
+real_gr$GC <- as.numeric(letterFrequency(focal_seq, "GC", as.prob = TRUE))
+pool$GC  <- as.numeric(letterFrequency(pool_seq,  "GC", as.prob = TRUE))
+
+real_gr$chr<- seqnames(real_gr)
+pool$chr <- seqnames(pool)
+
+# commented out because it takes a while
+#matched <- matchRanges(
+#    focal = real_gr,
+#    pool  = pool,
+#    covar = ~ chr +GC,   # formula: match on chromosome and GC
+#    method = "nearest",         # nearest matching
+#    replace = TRUE
+#)
+#RMC_gc_chr <- matched(matched)
+# not this doesent keep the width well, just center them as peaks
+saveRDS(RMC_gc_chr,"RMC_covariate.rds")
+RMC_gc_chr <- readRDS("RMC_covariate.rds")
+# now the fulyy random ones:
+RMC_rand <- randomizeRegions(real_gr,
+                              genome = BSgenome.Hsapiens.UCSC.hg19,
+                              allow.overlaps = FALSE)
+# this does keep width for whatever raaason 
+
+#and the old one
+set.seed(1234)
+sim_bed <- fread("C:/Users/38598/Desktop/hivint/Integrations3/STP_simulated_hg19.clean_R1.bed")
+RMC_old <- sim_bed[sample(nrow(sim_bed), nrow(nups)), ]
+rm(sim_bed)
+# cool # now stick them together i guess
+
+
+RMC_rand <- as.data.table(RMC_rand)
+RMC_rand <- RMC_rand[,c(1,2,3)]
+RMC_rand$rmc <- "rand"
+
+RMC_gc_chr <- as.data.table(RMC_gc_chr)
+RMC_gc_chr <- RMC_gc_chr[,c(1,2,3)]
+RMC_gc_chr$rmc <- "covariate"
+
+RMC_old <- RMC_old[,c(1,2,3)]
+RMC_old$rmc <- "old"
+colnames(RMC_old) <- colnames(RMC_rand)
+
+RMC <- rbind(RMC_rand,RMC_old,RMC_gc_chr)
+rm(RMC_rand,RMC_gc_chr,RMC_old)
+# fix widths to 2
+RMC <- as.data.table(RMC)
+RMC[,start:=end-start%/%2][,end:=start+1]
+RMC <- RMC[seqnames %in% chrnames,]
+# itnersect with lads
+setkey(RMC,seqnames,start,end)
+
+RMC <- foverlaps(RMC,lads)
+#not a complete overlap, 2% here drop out due to no lad data, small enough to ignore
+RMC <- RMC[!is.na(loc.start),]
 ```
+
+ Count and proportion plots with and without KO153
 
 ```{r,echo = FALSE}
 # Initial simple graphs
@@ -349,9 +425,9 @@ Feature-anchored frequency plot? or whatever
 
 ```
 
-Violin plots of expression for genic integrations
-    
-```{r}
+Violin plots of expression for genic integrations and LAD status
+    Note this is only expression data from genes we have integrations in
+```{r,echo = FALSE}
 ggplot(over, aes(x = cellType, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
   geom_violin(trim =T) +
     labs(x = "Group", y = "Expression(log2 var norm count)",
@@ -372,16 +448,52 @@ ggplot(over, aes(x = group, y = log2(variance_norm_counts+1),fill = LAD_binary))
   geom_violin(trim =T) +
             labs(x = "Group", y = "Expression(log2 var norm count)",
                                                title = "Expression distribution by sample and LAD") + facet_wrap(~cellType, scales = "free")+
-                                                                                                  theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
-                                                                                                                                                                        scale_x_discrete(drop = TRUE)  +
-                                                                                                                                                                                                                                              scale_fill_brewer(palette="Blues", direction = 1)                                                                
+                       theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+        scale_x_discrete(drop = TRUE)  +
+         scale_fill_brewer(palette="Blues", direction = 1)                                                                
 ```
 
-Compare expression levels of non-integrating genes you have expression levels off!!!!!
+Comparison of all genes we have expression data for, by LAD/integration status
 
-```{r}
+```{r, echo = FALSE}
+# get all the expressioin data
+normalized_counts <- read.csv("C:/Users/38598/Desktop/hivint/nup153/Nup_62_2/cd4ACTvsREST_VSTcounts.csv")
 
+# good now we have all genes, intersect this with LADS and genic integrations
+# First split by Act/Rest, then paste back together
+normalized_counts <- as.data.table(normalized_counts)
+normcounts2 <- normalized_counts
+normalized_counts$type <- "Resting"
+normcounts2$type <- "Activated"
+normalized_counts$variance_norm_counts <- normalized_counts$resting
+normcounts2$variance_norm_counts <- normcounts2$activated
+
+# we also need  Non integration LADs. so we need to cross lads with genes again
+lad_genes <- foverlaps(lads[LAD_binary == "LAD"],genes)
+
+# count it all up
+normalized_counts[,Integration:=ifelse(gene_name %in% nups[cellType =="Resting" & isGenic =="Genic",]$ensembl_gene_id,
+                                      "Integration present","No integration")][,LAD_status:=ifelse(gene_name %in% lad_genes[type =="Resting" & LAD_binary =="LAD",]$ensembl_gene_id,"in LAD","not in LAD")]
+
+normcounts2[,Integration:=ifelse(gene_name %in% nups[cellType =="Activated" & isGenic =="Genic",]$ensembl_gene_id,
+                                      "Integration present","No integration")][,LAD_status:=ifelse(gene_name %in% lad_genes[type =="Activated" & LAD_binary =="LAD",]$ensembl_gene_id,"in LAD","not in LAD")]
+
+norms <- rbind(normalized_counts,normcounts2)
+
+ggplot(norms, aes(x = type, y = log2(variance_norm_counts+1),fill = LAD_status)) +
+  geom_violin(trim =T) +
+                labs(x = "Group", y = "Expression(log2 var norm count)",
+                                                                             title = "Expression distribution") + facet_wrap(~Integration, scales = "free")+
+                                                                                                                                                                 theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+                                                                                                                                                                                                                                                             scale_x_discrete(drop = TRUE)  +
+                                                                                                                                                                                                                                                                                                                                                                  scale_fill_brewer(palette="Blues", direction = 1)    
 ```
+
+
+Genic unique and separate integrations
+
+
+Generalized uniqueness (unique in certain base window, regardless of being in gene or not)
 
 Heatmaps relative to rloops etc..
 
