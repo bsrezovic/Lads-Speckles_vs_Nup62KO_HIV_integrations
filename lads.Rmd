@@ -294,7 +294,8 @@ pool$chr <- seqnames(pool)
 #)
 #RMC_gc_chr <- matched(matched)
 # not this doesent keep the width well, just center them as peaks
-saveRDS(RMC_gc_chr,"RMC_covariate.rds")
+set.seed(1234)
+#saveRDS(RMC_gc_chr,"RMC_covariate.rds")
 RMC_gc_chr <- readRDS("RMC_covariate.rds")
 # now the fulyy random ones:
 RMC_rand <- randomizeRegions(real_gr,
@@ -303,7 +304,7 @@ RMC_rand <- randomizeRegions(real_gr,
 # this does keep width for whatever raaason 
 
 #and the old one
-set.seed(1234)
+
 sim_bed <- fread("C:/Users/38598/Desktop/hivint/Integrations3/STP_simulated_hg19.clean_R1.bed")
 RMC_old <- sim_bed[sample(nrow(sim_bed), nrow(nups)), ]
 rm(sim_bed)
@@ -334,9 +335,13 @@ setkey(RMC,seqnames,start,end)
 RMC <- foverlaps(RMC,lads)
 #not a complete overlap, 2% here drop out due to no lad data, small enough to ignore
 RMC <- RMC[!is.na(loc.start),]
+
+RMC[,type2:=paste0(type,"_RMC")]
+RMC[,type3:=paste0(type,"_RMC_",rmc)]
+
 ```
 
- Count and proportion plots with and without KO153
+ Count and proportion plots with and without KO153 / Random matched controls
 
 ```{r,echo = FALSE}
 # Initial simple graphs
@@ -344,11 +349,23 @@ RMC <- RMC[!is.na(loc.start),]
 # just the count (this is total, includes KO153)
 ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
 , aes(fill=LAD_binary, x=cellType)) + 
-  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
-            vjust = -0.3) +
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
+# same as above but with RMC
+ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=cellType)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  geom_bar(data = RMC, aes(x = type3, fill = LAD_binary), inherit.aes = F)+
+   geom_text(data = RMC,stat = "count", aes(label = ..count..,x = type3, fill = LAD_binary), inherit.aes = F,vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1))+
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+# This one just to show KO153 is in the dataset
 ggplot(over[!group%in%c("Resting_mock","Activated_mock"),]
 , aes(fill=LAD_binary, x=group)) + 
   geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
@@ -356,13 +373,24 @@ ggplot(over[!group%in%c("Resting_mock","Activated_mock"),]
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
-
+# just KO62
 ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
 , aes(fill=LAD_binary, x=group)) + 
   geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
             vjust = -0.3) +
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+# add in the RMC here as well
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=LAD_binary, x=group)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + 
+      geom_bar(position = position_stack(reverse = TRUE),data = RMC, aes(x = type3, fill = LAD_binary), inherit.aes = F)+
+            ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),position = position_stack(reverse = TRUE,vjust = 1),
+                              vjust = -0.3) +
+                                  geom_text(data = RMC,stat = "count", aes(label = ..count..,x = type3, fill = LAD_binary), inherit.aes = F,position = position_stack(reverse = TRUE,vjust = 1),
+                                                                  vjust = -0.3) +
+                                                                                                    scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+                                                                                                                                        xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
 #Add proportion plots
 
@@ -372,20 +400,29 @@ ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activat
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
-ggplot(over[!group%in%c("Resting_mock","Activated_mock"),]
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
 , aes(fill=LAD_binary, x=group)) + 
-  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All integrations vs LADs")+
-  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
-  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+  geom_bar(position = "fill")+ 
+    geom_bar(data = RMC, aes(x = type3, fill = LAD_binary), position = "fill")+
+      theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+        scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+          xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+# below are rations with KO153 included, not needed right now probably
+
+#ggplot(over[!group%in%c("Resting_mock","Activated_mock"),]
+#, aes(fill=LAD_binary, x=group)) + 
+#  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All integrations vs LADs")+
+#  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+#  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
 ```
 
 Realtive insertion location plots for HIV integration within LADs.
-Semm relatively uniform
+Seem relatively uniform, just covariate RMCs behaving weirdly at LAD start sites, which is expected due to GC content of LADs? (covariate RMCs are made to be similar to integration sites in GC content and chromosomal ratios)
 
 ```{r,echo = FALSE}
 over[,rel_pos:= (integration_start - loc.start)/(loc.end-loc.start)]
-
 
 ggplot(over[LAD =="LAD" & ! group %in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153")], 
 aes(x = rel_pos, fill = group)) +
@@ -396,12 +433,27 @@ aes(x = rel_pos, fill = group)) +
        title = "Distribution of HIV KO62 insertions within LADS") +
   theme_minimal()
 
+# do the sam for RMC
+RMC[, rel_pos:=(start - loc.start)/(loc.end-loc.start)]
 
+ggplot(RMC[LAD =="LAD"], 
+aes(x = rel_pos, fill = type3)) +
+  geom_histogram(binwidth = 0.05, color = "white", boundary = 0) + # boundry deals with first bin artifacting
+    scale_fill_brewer(palette="Blues", direction = 1)+
+      labs(x = "Relative position inside LAD",
+             y = "Insertion count",
+                    title = "Distribution of random controls within LADS") +
+                      theme_minimal()
 ```
 
 Non_genic vs genic inside and outside LADs
 
 ```{r}
+# add genic status to RmC
+RMC <- foverlaps(RMC,genes)
+RMC[,isGenic:=ifelse(is.na(ensembl_gene_id),"Nongenic","Genic")]
+RMC[,genic_split := paste0("RMC_",isGenic,"_",rmc)]
+#counts
 ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
 , aes(fill=LAD_binary, x=isGenic)) + 
   geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
@@ -409,6 +461,17 @@ ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activat
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
+ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=isGenic)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+      geom_text(stat = "count", aes(label = ..count..),
+                        vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+                               geom_bar(data = RMC, aes(x = genic_split, fill = LAD_binary),position = position_stack(reverse = TRUE))+ 
+                                                                  geom_text(data = RMC,stat = "count", aes(label = ..count..,x = genic_split, fill = LAD_binary), inherit.aes = F,vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1))+
+                                                                                          scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+                                                                                                                                   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+                                                    #proportions
 ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
 , aes(fill=LAD_binary, x=isGenic)) + 
   geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
