@@ -419,7 +419,7 @@ ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activat
 ```
 
 Realtive insertion location plots for HIV integration within LADs.
-Seem relatively uniform, just covariate RMCs behaving weirdly at LAD start sites, which is expected due to GC content of LADs? (covariate RMCs are made to be similar to integration sites in GC content and chromosomal ratios)
+Seem relatively uniform, just covariate RMCs behaving weirdly at LAD start sites, which is expected due to GC content of LADs? (covariate RMCs are made to be similar to integration sites in GC content and chromosomal ratios).
 
 ```{r,echo = FALSE}
 over[,rel_pos:= (integration_start - loc.start)/(loc.end-loc.start)]
@@ -466,7 +466,7 @@ ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activat
   geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
       geom_text(stat = "count", aes(label = ..count..),
                         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
-                               geom_bar(data = RMC, aes(x = genic_split, fill = LAD_binary),position = position_stack(reverse = TRUE))+ 
+    geom_bar(data = RMC, aes(x = genic_split, fill = LAD_binary),position = position_stack(reverse = TRUE))+ 
                                                                   geom_text(data = RMC,stat = "count", aes(label = ..count..,x = genic_split, fill = LAD_binary), inherit.aes = F,vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1))+
                                                                                           scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
                                                                                                                                    xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
@@ -480,6 +480,15 @@ ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activat
 
 
   # here add random matched controls into the mix, thus separating
+
+                                                      #proportions
+ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=isGenic)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+    geom_bar(data = RMC, aes(x = genic_split, fill = LAD_binary),position ="fill")+ 
+      scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+        xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 90, vjust = 0, hjust=0.5))
+        
 ```
 
 Feature-anchored frequency plot? or whatever
@@ -491,32 +500,46 @@ Feature-anchored frequency plot? or whatever
 Violin plots of expression for genic integrations and LAD status
     Note this is only expression data from genes we have integrations in
 ```{r,echo = FALSE}
-ggplot(over, aes(x = cellType, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),], aes(x = cellType, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
   geom_violin(trim =T) +
     labs(x = "Group", y = "Expression(log2 var norm count)",
-           title = "Expression distribution by group") +
-             theme_minimal()
+           title = "Expression distribution by LAD/Activation") +
+             theme_minimal()+ scale_fill_brewer(palette="Blues", direction = 1)+theme(legend.title = element_blank())
 
 
-ggplot(over, aes(x = group, y = log2(variance_norm_counts+1),fill = group)) +
+
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),], aes(x = group, y = log2(variance_norm_counts+1),fill = group)) +
   geom_violin(trim =T) +
           labs(x = "Group", y = "Expression(log2 var norm count)",
                                    title = "Expression distribution by sample") + facet_wrap(~cellType, scales = "free")+
-                                                   theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
-                                                                      scale_x_discrete(drop = TRUE)+
-                                                                      scale_fill_brewer(palette="Blues", direction = 1)
+                    theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+                           scale_x_discrete(drop = TRUE)+
+               scale_fill_brewer(palette="Blues", direction = 1)+theme(legend.position = "none")
+
+ggplot(over[!group%in%c("Resting_mock","Activated_mock"),], aes(x = group, y = log2(variance_norm_counts+1),fill = group)) +
+  geom_violin(trim =T) +
+          labs(x = "Group", y = "Expression(log2 var norm count)",
+                                   title = "Expression distribution by sample") + facet_wrap(~cellType, scales = "free")+
+                    theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+                           scale_x_discrete(drop = TRUE)+
+               scale_fill_brewer(palette="Blues", direction = 1)+theme(legend.position = "none")
 
 
-ggplot(over, aes(x = group, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),], aes(x = group, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
   geom_violin(trim =T) +
             labs(x = "Group", y = "Expression(log2 var norm count)",
                                                title = "Expression distribution by sample and LAD") + facet_wrap(~cellType, scales = "free")+
                        theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
         scale_x_discrete(drop = TRUE)  +
-         scale_fill_brewer(palette="Blues", direction = 1)                                                                
+         scale_fill_brewer(palette="Blues", direction = 1)+theme(legend.title = element_blank()) 
+
+#adding RMCs to this is lemon difficult
+# have to cross it with all expression data and thats below
+#  continued below after expression dataset load
 ```
 
-Comparison of all genes we have expression data for, by LAD/integration status
+Same as above but added RMCs (GC cov only for spacing reasons. Generally look the same)
+If plot doesent separate experimental samples that means mock and KO153 are excluded:
 
 ```{r, echo = FALSE}
 # get all the expressioin data
@@ -543,15 +566,54 @@ normcounts2[,Integration:=ifelse(gene_name %in% nups[cellType =="Activated" & is
 
 norms <- rbind(normalized_counts,normcounts2)
 
+#Slam this into the RMC data
+genic_RMC <- foverlaps(RMC,genes)
+genic_RMC <- genic_RMC[!is.na(ensembl_gene_id),]
+
+genic_RMC2 <- merge(genic_RMC, norms,by.x = c("ensembl_gene_id","type"),by.y =c("gene_name","type"))
+#good that worked 
+
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),], aes(x = cellType, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
+  geom_violin(trim =T, width= 0.7) +
+              labs(x = "Group", y = "Expression(log2 var norm count)",
+                                                             title = "Expression distribution by group plus RMCs") +
+                                                                                                                      theme_minimal()+ scale_fill_brewer(palette="Blues", direction = 1)+
+                                                                                                                                                                                    geom_violin(width = 0.7, data = genic_RMC2[type3 %in%c("Activated_RMC_covariate","Resting_RMC_covariate"),], aes(x = type2, y = log2(variance_norm_counts+1),fill = LAD_binary),trim = T)+theme(legend.title = element_blank())
+
+
+genic_RMC2$cellType <- genic_RMC2$type # need equal names for faceting variable
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),], aes(x = group, y = log2(variance_norm_counts+1),fill = group)) +
+  geom_violin(trim =T,width = 0.5) +
+    geom_violin(width = 0.5, data = genic_RMC2[type3 %in%c("Activated_RMC_covariate","Resting_RMC_covariate"),], aes(x = type2, y = log2(variance_norm_counts+1),fill = type2),trim = T)+
+              labs(x = "Group", y = "Expression(log2 var norm count)",
+                                                 title = "Expression distribution by sample") + facet_wrap(~cellType, scales = "free")+
+                                                                     theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+                                                                                                scale_x_discrete(drop = TRUE)+
+                                                                                                               scale_fill_brewer(palette="Blues", direction = 1)+theme(legend.position = "none")
+
+
+ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),], aes(x = group, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
+  geom_violin(trim =T) +
+   geom_violin(width = 0.5, data = genic_RMC2[type3 %in%c("Activated_RMC_covariate","Resting_RMC_covariate"),], aes(x = type2, y = log2(variance_norm_counts+1),fill = LAD_binary),trim = T)+
+            labs(x = "Group", y = "Expression(log2 var norm count)",
+                                               title = "Expression distribution by sample and LAD") + facet_wrap(~cellType, scales = "free")+
+                       theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+        scale_x_discrete(drop = TRUE)  +
+         scale_fill_brewer(palette="Blues", direction = 1)+theme(legend.title = element_blank()) 
+
+```
+
+Comparison of all genes we have expression data for, by LAD/integration status
+
+```{r}
 ggplot(norms, aes(x = type, y = log2(variance_norm_counts+1),fill = LAD_status)) +
   geom_violin(trim =T) +
                 labs(x = "Group", y = "Expression(log2 var norm count)",
                                                                              title = "Expression distribution") + facet_wrap(~Integration, scales = "free")+
                                                                                                                                                                  theme_minimal()+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
                                                                                                                                                                                                                                                              scale_x_discrete(drop = TRUE)  +
-                                                                                                                                                                                                                                                                                                                                                                  scale_fill_brewer(palette="Blues", direction = 1)    
+                                                                                                                                                                                                                                                                                                                                                                  scale_fill_brewer(palette="Blues", direction = 1)  
 ```
-
 
 Genic unique and separate integrations
 
