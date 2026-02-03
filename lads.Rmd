@@ -20,7 +20,7 @@ library(Biostrings)
 library(BSgenome.Hsapiens.UCSC.hg19)
 ```
 
-## Comparison of Nup62KO integrations to Lads
+Comparison of Nup62KO integrations to Robson LAD data
 
 ```{r, echo = F}
 #Load data
@@ -31,7 +31,7 @@ df_act <- as.data.frame(actbw)
 
 ```
 
-Note: DamID lads data is raw (only short outliers seem to be filtered out, with background left in). I re-called the peaks using the same method mentioned in the paper (circualar binary segmentation instead of the hidden markov model that I usally use provided by Maja).
+Note: DamID lads data is raw (only short outliers seem to be filtered out based on file names, with background left in). I re-called the peaks using the same method mentioned in the paper (circualar binary segmentation instead of the hidden markov model that I usally use provided by Maja) to keep consistency with their results. The two methods shouldnt differ much.
 
 ```{r, echo = F}
 bin = 0.5
@@ -105,48 +105,57 @@ dfg <- segments.df[segments.df$seg.mean >=high_thresh,]
 dfb <- segments.df[segments.df$seg.mean <=low_thresh,]
 
 ggplot(df2, aes(x = mid, y = 0, xend = mid, yend = score)) +
-     geom_segment(color = "steelblue", alpha = 0.6) +
-              # segemnts that ae def not LADS
-                            geom_segment(
-                                                   data = dfb,
-                                                                                       aes(
-                                                                                         x    = loc.start,
-                                                                                           xend = loc.end,
-                                                                                                     y    = - 4.3,     # lower the bar slightly
-                                                                                                               yend = - 4.4      # same y for horizontal
-                                                                                                                         ), color = "darkred"
-                                                                                                                          )+
-                                                                                                                           # probably lads?
-                                                                                                                              geom_segment(
-                                                                                                                                  data = dfg,
-                                                                                                                                   aes(
-                                                                                                                                     x  = loc.start,
-                                                                                                                                     xend  = loc.end,
-                                                                                                                                      y = -4.2,
-                                                                                                                                      yend=-4.3),
-                                                                                                                                       color = "green") +
-                                                                                                                                        facet_wrap(~ seqnames, scales = "free_x") +
-                                                                                                                                         labs(x = "Genomic coordinate (bp)", y = "Score") +
-                                                                                                                                         theme_minimal()+
-                                                                                                                                          geom_point(
-                                                                                                                                          aes(x = Inf, y = Inf, color = "Raw score"),
-                                                                                                                                          show.legend = TRUE
-                                                                                                                                           ) +
-                                                                                                                                           geom_point(
-                                                                                                                                           aes(x = Inf, y = Inf, color = "LADs"),
-                                                                                                                                           show.legend = TRUE
-                                                                                                                                            ) +
-                                                                                                                                             geom_point(
-                                                                                                                                              aes(x = Inf, y = Inf, color = "Not LADs"),
-                                                                                                                                              show.legend = TRUE
-                                                                                                                                              ) +
-                                                                                                                                               scale_color_manual(
-                                                                                                                                                name   = "",
-                                                                                                                                                 values = c(
-                                                                                                                                                 "Raw score"     = "steelblue",
-                                                                                                                                                  "LADs"  = "green",
-                                                                                                                                                   "Not LADs" = "darkred"
-                                                                                                                                                    ))+ggtitle("Chr 15")+xlab("")+ylab("log2(Lamin fusion/Dam)")
+  geom_segment(color = "steelblue", alpha = 0.6) +
+  geom_segment(
+    data = dfb,
+    aes(
+      x = loc.start,
+      xend = loc.end,
+      y = -4.3,
+      yend = -4.4
+    ),
+    color = "darkred"
+  ) +
+  geom_segment(
+    data = dfg,
+    aes(
+      x = loc.start,
+      xend = loc.end,
+      y = -4.2,
+      yend = -4.3
+    ),
+    color = "green"
+  ) +
+  facet_wrap(~seqnames, scales = "free_x") +
+  labs(x = "Genomic coordinate (bp)", y = "Score") +
+  theme_minimal() +
+  geom_point(
+    aes(x = Inf, y = Inf, color = "Raw score"),
+    show.legend = TRUE
+  ) +
+  geom_point(
+    aes(x = Inf, y = Inf, color = "LADs"),
+    show.legend = TRUE
+  ) +
+  geom_point(
+    aes(x = Inf, y = Inf, color = "Not LADs"),
+    show.legend = TRUE
+  ) +
+  scale_color_manual(
+    name = "",
+    values = c(
+      "Raw score" = "steelblue",
+      "LADs" = "green",
+      "Not LADs" = "darkred"
+    )
+  ) +
+  ggtitle("Chr 15") +
+  xlab("") +
+  ylab("log2(Lamin fusion/Dam)")
+
+
+  #save df2 to plot all the way down
+df2_plot1 <- df2
 ```
 
 ```{r, echo = FALSE, eval = FALSE}
@@ -645,8 +654,8 @@ colnames(blads2) <- c("chrom","start","end","name","count","width")
 
 LAD overlap Belmont vs Robson
    The Robson method (atleast the way I tried to reconstruct it) of calling LADs from DamID peaks using circular binary segmentation results in more numerous, smaller LADs being called than in Belmon, where they bin the genome and just calculate a cumulative fold change od LmnB1-Dam over Dam for the bins, resulting in wider calls.
-The results are pretty similar: around 80% of Robson LADs are overlapping with Belmon LADs,
-and around 70% of Belmont LADs overlap Robson LADs
+The results are pretty similar: around 82% of Robson LADs are overlapping with Belmont LADs,
+and around 93% of Belmont LADs overlap Robson LADs.
 As expected more integrations fall in the bigger Belmont LADs, but the various ratios between groups remain the same:
 
 ```{r,echo = FALSE}
@@ -715,10 +724,12 @@ df2 <- data.frame(
 
 ggplot(df2, aes(x = Set, y = Count, fill = Category)) +
   geom_col(position="fill") +
-  ylab("Proportion") +
+  ylab("Proportion") +ggtitle("Comparisn of Belmont and Robson LADs")+
   scale_y_continuous(labels = scales::percent) +
   theme_minimal() + 
          scale_fill_brewer(palette="Blues", direction = -1)+theme(legend.title = element_blank()) 
+
+rm(df,df2,gr1,gr2,gr1r,gr1a,hits,gr1_overlap,gr2_overlap)
 ```
 
 
@@ -734,7 +745,7 @@ over2$LAD_binary <- "LAD"
 over2[is.na(start),LAD_binary:="not LAD"]
 
 
-# just the count (this is total, includes KO153)
+# just the count (this is total, without mock and K153)
 ggplot(over2[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
 , aes(fill=LAD_binary, x=cellType)) + 
   geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs Belmont LADs")+
@@ -743,8 +754,69 @@ ggplot(over2[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activa
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
+# split up by sample
+ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=LAD_binary, x=group)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs Belmont LADs")+geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1))  +
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+```
 
+Cross comparison of integrations in Belmont and Robson LAD data
+
+```{r,echo = FALSE}
+# get a new table to cross reference all this 
+# modified so that we dont end up with something unrecognisable as columns in a huge table
+# 1. add unique id to nups table
+nups$uid <- 1:nrow(nups)
+# make sure there are no self -overlaps here
+# hmm are these things self overlapping?
+
+# ofcourse the Resting and Activatd for Robson LADS do overlap, deal with that as we go
+hits <- findOverlaps(gr1[gr1$type =="Resting"],gr1[gr1$type=="Resting"])
+hits[queryHits(hits) != subjectHits(hits)]
+
+gr2 <- reduce(gr2)# ok due to the hg19->hg38 diffs we have reinduced some overlaps here
+hits <- findOverlaps(gr2,gr2)
+hits[queryHits(hits) != subjectHits(hits)]
+ 
+
+
+lad1 <- lads[LAD_binary == "LAD",c(2,3,4)]
+lad2 <- as.data.table(gr2)
+lad2 <- lad2[,c(1,2,3)]
+lad1$set <- "Robson"
+lad2$set <- "Belmont"
+lads_total <- rbind(lad1,lad2,use.names=FALSE)
+colnames(lads_total) <- c("chrom","start","end","set")
+setkey(lads_total,chrom,start,end)
+rm(lad1,lad2)
+
+over3 <- foverlaps(nups,lads_total)
+
+over3[,suma:=.N,by = c("uid","cellType")] # if its in more than 2 then its bridging 2 gaps basically
+
+over3[is.na(set), set:="Neither"]
+over3[suma>1,set:="Both"]
+over3[set == "Robson",set:="Only Robson"]
+over3[set == "Belmont",set:="Only Belmont"]
+
+# simple bar graph to showcase this somehow
+ggplot(over3, aes(x = set, fill = set)) +
+  geom_bar() +
+  theme_minimal() +ggtitle("Number of HIV integration in LAD sets")+
+  xlab("") +scale_fill_brewer(palette="Blues", direction = 1)+
+  ylab("") + theme(legend.position="none")
 ```
 
 
 Belmont TAS-seq speckle data:
+
+
+```{r,echo = FALSE}
+# load in the presumed speckle associated datums
+
+
+
+```
