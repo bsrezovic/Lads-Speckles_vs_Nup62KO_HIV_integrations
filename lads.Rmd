@@ -626,3 +626,125 @@ Heatmaps relative to rloops etc..
 ```{r}
 
 ```
+
+Comparison with DamID data from Belmont
+
+
+```{r, include = FALSE}
+
+# first chech their K562 Lamin data to see (expect 85% match?)
+#blads <- fread("belmont_data/belmont_lads.bed")
+#blads[,width:=V3-V2]
+#colnames(blads) <- c("chrom","start","end","width")
+
+#use ucsc to lift over as well?
+blads2 <- fread("belmont_data/belmont_lads_lifted.bed")
+blads2[,width:=V3-V2]
+colnames(blads2) <- c("chrom","start","end","name","count","width")
+```
+
+LAD overlap Belmont vs Robson
+   The Robson method (atleast the way I tried to reconstruct it) of calling LADs from DamID peaks using circular binary segmentation results in more numerous, smaller LADs being called than in Belmon, where they bin the genome and just calculate a cumulative fold change od LmnB1-Dam over Dam for the bins, resulting in wider calls.
+The results are pretty similar: around 80% of Robson LADs are overlapping with Belmon LADs,
+and around 70% of Belmont LADs overlap Robson LADs
+As expected more integrations fall in the bigger Belmont LADs, but the various ratios between groups remain the same:
+
+```{r,echo = FALSE}
+
+gr1 <- makeGRangesFromDataFrame(lads, keep.extra.columns = TRUE)
+gr1 <- gr1[gr1$LAD_binary == "LAD"]
+# this is both activated and Resting so presumably some things are being counted twice
+gr2 <- makeGRangesFromDataFrame(blads2, keep.extra.columns = TRUE)
+
+length(gr1)
+length(gr2)
+
+# liftover back to hg19 for the new data
+#chain <- import.chain("hg38ToHg19.over.chain")
+
+#lift <- liftOver(gr2, chain)
+#gr2_hg19 <- unlist(lift)
+#length(gr2_hg19)
+# put it back into the data.table before i forget
+#blads <- as.data.table(gr2_hg19)
+
+# confirm percentage overlap
+
+hits <- findOverlaps(gr1, gr2, type ="within")
+# test the proces from fig7.Rmd
+#hits <- findOverlaps(gr1, hff[hff$lad_status=="LADs"], type ="any")
+
+# this is how many mine have belmont in them (meaning any overlap)
+sum(1:length(gr1) %in%unique(queryHits(hits)) ) / length(gr1) * 100
+sum( 1:length(gr2) %in%unique(subjectHits(hits))) / length(gr2) * 100
+
+
+# split resting and active just for lols
+gr1r <- gr1[gr1$type == "Resting"]
+gr1a <- gr1[gr1$type == "Activated"]
+
+hits <- findOverlaps(gr1a, gr2, type ="any")
+sum(1:length(gr1a) %in%unique(queryHits(hits)) ) / length(gr1a) * 100
+sum( 1:length(gr2) %in%unique(subjectHits(hits))) / length(gr2) * 100
+
+hits <- findOverlaps(gr1r, gr2, type ="any")
+sum(1:length(gr1r) %in%unique(queryHits(hits)) ) / length(gr1r) * 100
+sum( 1:length(gr2) %in%unique(subjectHits(hits))) / length(gr2) * 100
+
+
+gr1_overlap  <- gr1 %over% gr2
+gr2_overlap  <- gr2 %over% gr1
+
+# percentages
+pct1 <- sum(gr1_overlap) / length(gr1) * 100
+pct2 <- sum(gr2_overlap) / length(gr2) * 100
+
+df <- data.frame(
+  Set = c("gr1", "gr2"),
+  PercentOverlap = c(pct1, pct2)
+)
+
+
+
+df2 <- data.frame(
+  Set = rep(c("Robson LAD","Belmon LAD"), each = 2),
+  Category = rep(c("Overlap","No Overlap"), 2),
+  Count = c(sum(gr1_overlap), length(gr1)-sum(gr1_overlap),
+            sum(gr2_overlap), length(gr2)-sum(gr2_overlap))
+)
+
+ggplot(df2, aes(x = Set, y = Count, fill = Category)) +
+  geom_col(position="fill") +
+  ylab("Proportion") +
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal() + 
+         scale_fill_brewer(palette="Blues", direction = -1)+theme(legend.title = element_blank()) 
+```
+
+
+
+```{r,echo =FALSE}
+#repeat some graphs just to get the point across
+setkey(blads2,chrom, start,end)
+setkey(nups,chr_name,integration_start,integration_end)
+# complete overlp here, no integrations land in the spaces without LAD data
+over2 <- foverlaps(nups,blads2)
+# just making things clear
+over2$LAD_binary <- "LAD"
+over2[is.na(start),LAD_binary:="not LAD"]
+
+
+# just the count (this is total, includes KO153)
+ggplot(over2[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=cellType)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs Belmont LADs")+
+  geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+
+```
+
+
+Belmont TAS-seq speckle data:
