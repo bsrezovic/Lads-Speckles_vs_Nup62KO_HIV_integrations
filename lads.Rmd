@@ -187,7 +187,7 @@ saveRDS(list(seg_a,seg_r),"Segments_list.rds")
 ```
 
 
-Exact overlaps for all Lads and all Nup62KO integrations
+Exact overlaps for all Robson LADs and Nup62KO integrations
 
 ```{r, echo = FALSE}
 # load in the above prepared segmented 
@@ -249,6 +249,12 @@ seg_r[,LAD_binary:=ifelse(LAD == "LAD","LAD","not LAD")][,type := "Resting"]
 lads <- rbind(seg_a,seg_r)
 rm(seg_a)
 rm(seg_r)
+
+#Load Nup data as well
+nups <- read.csv("C:/Users/38598/Desktop/hivint/nup153/Nup_62_2/Nup_all_peaks_together.csv")
+nups <- nups[,-1]
+nups <- as.data.table(nups)
+nups <- nups[!is.na(integration_start)]
 ```
 
 
@@ -256,11 +262,7 @@ Overlaps between Nup 62KO integrations and LADs
  
  
 ```{r,echo = FALSE}
-#Load Nup data as well
-nups <- read.csv("C:/Users/38598/Desktop/hivint/nup153/Nup_62_2/Nup_all_peaks_together.csv")
-nups <- nups[,-1]
-nups <- as.data.table(nups)
-nups <- nups[!is.na(integration_start)]
+
 # load the random integration data as well at some point
 setkey(lads,chrom, loc.start,loc.end)
 setkey(nups,chr_name,integration_start,integration_end)
@@ -640,22 +642,48 @@ Comparison with DamID data from Belmont
 
 
 ```{r, include = FALSE}
-
+library(easylift)
 # first chech their K562 Lamin data to see (expect 85% match?)
 #blads <- fread("belmont_data/belmont_lads.bed")
 #blads[,width:=V3-V2]
 #colnames(blads) <- c("chrom","start","end","width")
-
+chain_file <- "hg38ToHg19.over.chain"
+chain <- import.chain(chain_file)
 #use ucsc to lift over as well?
 blads2 <- fread("belmont_data/belmont_lads_lifted.bed")
 blads2[,width:=V3-V2]
 colnames(blads2) <- c("chrom","start","end","name","count","width")
+
+# is this the TSA seq peaks for LADS???
+blads3 <- fread("belmont_data/K562_pwv_fiLAD.bed")
+
+#total data?
+tots <- fread("belmont_data/All_Data100kb.tsv")
+# separate our target cells
+tots <- tots[cell.name == "K562",]
+# save this as .bed
+tots <- tots[,-1]
+tots$index <- 1:nrow(tots)  # get a unique ide to handle multi
+tot_gr <- makeGRangesFromDataFrame(tots, keep.extra.columns = TRUE)
+genome(tot_gr) <- "38"
+gr_hg19 <- easylift(tot_gr,
+                    to = "hg19",
+                    chain = "hg38ToHg19.over.chain")
+
+tots19 <- as.data.table(gr_hg19)
+# keep the widestm multi aligns
+tots19 <- tots19 %>%
+  group_by(index) %>%
+  slice_max(width) %>%
+  as.data.table()
+
+
 ```
 
-LAD overlap Belmont vs Robson
+LAD overlap Belmont vs Robson (both DamID)
    The Robson method (atleast the way I tried to reconstruct it) of calling LADs from DamID peaks using circular binary segmentation results in more numerous, smaller LADs being called than in Belmon, where they bin the genome and just calculate a cumulative fold change od LmnB1-Dam over Dam for the bins, resulting in wider calls.
-The results are pretty similar: around 82% of Robson LADs are overlapping with Belmont LADs,
-and around 93% of Belmont LADs overlap Robson LADs.
+The results are pretty similar: around 80% of Robson Jurkat LADs are overlapping with Belmont K562 LADs,
+and around 90% of Belmont LADs overlap Robson LADs.
 As expected more integrations fall in the bigger Belmont LADs, but the various ratios between groups remain the same:
 
 ```{r,echo = FALSE}
@@ -663,7 +691,7 @@ As expected more integrations fall in the bigger Belmont LADs, but the various r
 gr1 <- makeGRangesFromDataFrame(lads, keep.extra.columns = TRUE)
 gr1 <- gr1[gr1$LAD_binary == "LAD"]
 # this is both activated and Resting so presumably some things are being counted twice
-gr2 <- makeGRangesFromDataFrame(blads2, keep.extra.columns = TRUE)
+gr2 <- makeGRangesFromDataFrame(tots19[lads == T,], keep.extra.columns = TRUE)
 
 length(gr1)
 length(gr2)
@@ -729,14 +757,14 @@ ggplot(df2, aes(x = Set, y = Count, fill = Category)) +
   theme_minimal() + 
          scale_fill_brewer(palette="Blues", direction = -1)+theme(legend.title = element_blank()) 
 
-rm(df,df2,gr1,gr2,gr1r,gr1a,hits,gr1_overlap,gr2_overlap)
+
 ```
 
 
 
 ```{r,echo =FALSE}
 #repeat some graphs just to get the point across
-setkey(blads2,chrom, start,end)
+setkey(tots19[,],seqnames, start,end)
 setkey(nups,chr_name,integration_start,integration_end)
 # complete overlp here, no integrations land in the spaces without LAD data
 over2 <- foverlaps(nups,blads2)
@@ -808,6 +836,8 @@ ggplot(over3, aes(x = set, fill = set)) +
   theme_minimal() +ggtitle("Number of HIV integration in LAD sets")+
   xlab("") +scale_fill_brewer(palette="Blues", direction = 1)+
   ylab("") + theme(legend.position="none")
+
+rm(df,df2,gr1,gr2,gr1r,gr1a,hits,gr1_overlap,gr2_overlap)
 ```
 
 
@@ -815,8 +845,9 @@ Belmont TAS-seq speckle data:
 
 
 ```{r,echo = FALSE}
-# load in the presumed speckle associated datums
+# load in the presumed speckle associated data
+# try tp extract it from the big file?
 
-
-
+spad <- fread("belmont_data/K562_TypeI_II_peak.bed")
+# type 1 and 2 peaks explained in Belmont
 ```
