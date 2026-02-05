@@ -894,24 +894,25 @@ ggplot(over4[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activa
 
 
 # add in RMCs here as well
-RMC <- foverlaps(RMC,spad)
-RMC[is.na(type),type:="Not in SPAD"]
+RMC2 <- foverlaps(RMC,spad)
+RMC2[is.na(type),type:="Not in SPAD"]
 
 # test out the same for
 ggplot(over4[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153")& type !="Not in SPAD",]
 , aes(fill=type, x=group)) + 
   geom_bar(position = "fill")+ 
-    geom_bar(data = RMC[type !="Not in SPAD",], aes(x = type3, fill = type), position = "fill")+
+    geom_bar(data = RMC2[type !="Not in SPAD",], aes(x = type3, fill = type), position = "fill")+
       theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
         scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
           xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
-rm(over4)
+rm(over4,RMC2)
 ```
 
 Integrations vs Belmont SPIN classification of intranuclear localization (combined use of TAS,DamID and Hi-C)
   This classification method widens the Spackle associated domains compared to the raw peak to integration overlap above.
   (NANs are regions that are present but not classified in Belmont data).
+
 
 
 ```{r,echo =FALSE}
@@ -922,17 +923,77 @@ over2[is.na(spin),spin:="Not in Belmont data"]
 
 ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
 , aes(fill=spin, x=cellType)) + 
-  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs SPIN states")+
     scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
       xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
 ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
 , aes(fill=spin, x=group)) + 
-  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs SPIN states")+
     scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
       xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
 
+# add RMCs
+RMC3 <- foverlaps(RMC,tots19)
+RMC3[is.na(spin),spin:="Not in Belmont data"]
+
+ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=cellType)) + 
+  geom_bar(position = "fill")+
+  geom_bar(data = RMC3[], aes(x = type3, fill = spin), position = "fill")+
+   theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs SPIN states")+
+    scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+      xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=group)) + 
+  geom_bar(position = "fill")+
+  geom_bar(data = RMC3[], aes(x = type3, fill = spin), position = "fill")+
+   theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs SPIN states")+
+    scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+      xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
 ```
 
+Why all the differences when using CG content covariate RMCs compared to fully random points or the bedwell method of creating a pool of sonication sized fragments?
+  - Belmont Spackle SPIN domains have on average 50% GC
+  - integrations and therefore covariates based on GC content have around 44%
+  - For example interior_Act1 SPIN domain has 45% GC
+  - Randomly sampling on hg19 gives around 38% GC
+Possible conclusion: Controlling for GC content in RMC creation here causes avoidance or bias to/agianst some SPIN domains,
+if there is more/less integrations in Spackle or LAD domains it is not due to GC content.
 
+```{r,echo = FALSE}
+# get CG frequencies for LADs, SPINs and for NUP integrations
+np <- nups[,c(2,3,4)]
+colnames(np) <- c("seqnames","start","end")
+nups_gr <- makeGRangesFromDataFrame(np)
+nups_ia1 <- makeGRangesFromDataFrame(tots19[spin == "Interior_Act1", ])
+nups_sp <- makeGRangesFromDataFrame(tots19[spin == "Speckle",])
+# add also the random ones
+rand <- makeGRangesFromDataFrame(RMC[rmc == "old",c(1,10,11)])
+
+nups_seq<- getSeq(BSgenome.Hsapiens.UCSC.hg19, nups_gr)
+intact1_seq<- getSeq(BSgenome.Hsapiens.UCSC.hg19, nups_ia1)
+spackle_seq<- getSeq(BSgenome.Hsapiens.UCSC.hg19, nups_sp)
+rand_seq<- getSeq(BSgenome.Hsapiens.UCSC.hg19, rand)
+
+gc_content_rand <- mean(rowSums(alphabetFrequency(rand_seq)[, c("G", "C")]) / width(rand_seq)) * 100
+gc_content_ints <- mean(rowSums(alphabetFrequency(nups_seq)[, c("G", "C")]) / width(nups_seq)) * 100
+gc_content_inta1 <- mean(rowSums(alphabetFrequency(intact1_seq)[, c("G", "C")]) / width(intact1_seq)) * 100
+gc_content_spa <- mean(rowSums(alphabetFrequency(spackle_seq)[, c("G", "C")]) / width(spackle_seq)) * 100
+
+
+gc_content_ints
+gc_content_inta1
+gc_content_spa 
+gc_content_rand
+```
+
+Unique vs in common genic integrations
+
+
+```{r}
+ngenic <- 
+```
