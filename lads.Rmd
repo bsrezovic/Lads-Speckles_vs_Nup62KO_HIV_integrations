@@ -18,6 +18,8 @@ library(nullranges)
 library(regioneR)
 library(Biostrings)
 library(BSgenome.Hsapiens.UCSC.hg19)
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
 ```
 
 Comparison of Nup62KO integrations to Robson LAD data
@@ -255,6 +257,8 @@ nups <- read.csv("C:/Users/38598/Desktop/hivint/nup153/Nup_62_2/Nup_all_peaks_to
 nups <- nups[,-1]
 nups <- as.data.table(nups)
 nups <- nups[!is.na(integration_start)]
+
+rm(test1,test2)
 ```
 
 
@@ -764,13 +768,14 @@ ggplot(df2, aes(x = Set, y = Count, fill = Category)) +
 
 ```{r,echo =FALSE}
 #repeat some graphs just to get the point across
-setkey(tots19[,],seqnames, start,end)
+setkey(tots19,seqnames, start,end)
 setkey(nups,chr_name,integration_start,integration_end)
 # complete overlp here, no integrations land in the spaces without LAD data
-over2 <- foverlaps(nups,blads2)
+over2 <- foverlaps(nups,tots19)
+
 # just making things clear
 over2$LAD_binary <- "LAD"
-over2[is.na(start),LAD_binary:="not LAD"]
+over2[is.na(start) | !lads,LAD_binary:="not LAD"]
 
 
 # just the count (this is total, without mock and K153)
@@ -833,7 +838,7 @@ over3[set == "Belmont",set:="Only Belmont"]
 # simple bar graph to showcase this somehow
 ggplot(over3, aes(x = set, fill = set)) +
   geom_bar() +
-  theme_minimal() +ggtitle("Number of HIV integration in LAD sets")+
+  theme_minimal() +ggtitle("Number of HIV integrations in LAD sets")+
   xlab("") +scale_fill_brewer(palette="Blues", direction = 1)+
   ylab("") + theme(legend.position="none")
 
@@ -841,13 +846,93 @@ rm(df,df2,gr1,gr2,gr1r,gr1a,hits,gr1_overlap,gr2_overlap)
 ```
 
 
-Belmont TAS-seq speckle data:
-
+Belmont TAS-seq speckle data (SPAD peaks called on 25kb segments)
+   These are pretty scarce datapoints so theres not many integrations in them. 
 
 ```{r,echo = FALSE}
 # load in the presumed speckle associated data
-# try tp extract it from the big file?
 
+#this is for type of spaclče asssocoation, big table is for extra info
 spad <- fread("belmont_data/K562_TypeI_II_peak.bed")
+spad <- spad[,c(1,2,3,4)]
+colnames(spad) <- c("seqnames","start","end","type")
+spad$index <- 1:nrow(spad)
+spad_gr <- makeGRangesFromDataFrame(spad, keep.extra.columns = TRUE)
+genome(spad_gr) <- "38"
+spad_hg19 <- easylift(spad_gr,
+                    to = "hg19",
+                    chain = "hg38ToHg19.over.chain")
+
+spad <- as.data.table(spad_hg19)
+# keep the widestm multi aligns
+spad <- spad %>%
+  group_by(index) %>%
+  slice_max(width) %>%
+  as.data.table()
+
+
 # type 1 and 2 peaks explained in Belmont
+setkey(spad,seqnames,start,end)
+
+over4 <- foverlaps(nups,spad)
+over4[is.na(type),type:="Not in SPAD"]
+
+ggplot(over4[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=type, x=group)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+# comapre just the two types
+ggplot(over4[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153") & type !="Not in SPAD",]
+, aes(fill=type, x=group)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+# is this significan?
+
+
+
+# add in RMCs here as well
+RMC <- foverlaps(RMC,spad)
+RMC[is.na(type),type:="Not in SPAD"]
+
+# test out the same for
+ggplot(over4[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153")& type !="Not in SPAD",]
+, aes(fill=type, x=group)) + 
+  geom_bar(position = "fill")+ 
+    geom_bar(data = RMC[type !="Not in SPAD",], aes(x = type3, fill = type), position = "fill")+
+      theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+        scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+          xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+rm(over4)
 ```
+
+Integrations vs Belmont SPIN classification of intranuclear localization (combined use of TAS,DamID and Hi-C)
+  This classification method widens the Spackle associated domains compared to the raw peak to integration overlap above.
+  (NANs are regions that are present but not classified in Belmont data).
+
+
+```{r,echo =FALSE}
+# big table
+table(tots19$spin,tots19$lads)
+ blue_palette <- colorRampPalette(c("azure", "dodgerblue4", "navy"))(11)
+over2[is.na(spin),spin:="Not in Belmont data"]
+
+ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=cellType)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+    scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+      xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=group)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+    scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+      xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+
+```
+
+
