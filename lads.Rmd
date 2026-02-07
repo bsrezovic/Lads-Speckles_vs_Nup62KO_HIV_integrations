@@ -22,7 +22,7 @@ library(BSgenome.Hsapiens.UCSC.hg19)
 knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
 ```
 
-Comparison of Nup62KO integrations to Robson LAD data
+**Comparison of Nup62KO integrations to Robson LAD data**
 
 ```{r, echo = F}
 #Load data
@@ -33,7 +33,7 @@ df_act <- as.data.frame(actbw)
 
 ```
 
-Note: DamID lads data is raw (only short outliers seem to be filtered out based on file names, with background left in). I re-called the peaks using the same method mentioned in the paper (circualar binary segmentation instead of the hidden markov model that I usally use provided by Maja) to keep consistency with their results. The two methods shouldnt differ much.
+Note: DamID LADs data is raw (only short outliers seem to be filtered out based on file names, with background left in). I re-called the peaks using the same method mentioned in the paper (circualar binary segmentation instead of the hidden markov model that I usally use provided by Maja) to keep consistency with their results. The two methods shouldnt differ much.
 
 ```{r, echo = F}
 bin = 0.5
@@ -53,7 +53,7 @@ pa <- ggplot(df_act, aes(x=score))+ geom_histogram(binwidth = bin, alpha = 0.4)+
 grid.arrange(pa, pr, ncol=2)
 ```
 
-```{r, echo = F}
+```{r, echo = F,messages =F, results = F}
 # tunning the DNA copy method
 df_act <- as.data.table(df_act)
 df_rest <- as.data.table(df_rest)
@@ -96,11 +96,13 @@ high_thresh <- quantile(segments.df$seg.mean, 0.575)          # top 5% signal
 low_thresh  <- -2 #quantile(segments.df$seg.mean, 0.05)  
 ```
 
-Example plot of score distribution on chromosomes and called LADs (by me).
-Paper doesent state exact parameters used, I presumed defaults for the peak calling weighted by fragment width and then varied the threshold until I got 18,6% of genes (around 3700 in resting and activated) classifed as overlapping LADs as they have in the paper (for the numbers to match this have to be protein coding genes only. 
-Additionaly they say its genes "within" LADs but the only way to get 18.6% and 3700 at the same time is to count any overlap between genes and LADs). I also marked segements with segemntation lower than -2 (meaning much higher Dam signal compared to Dam-fusion).
-
-```{r,echo = FALSE}
+```{r, eval = F,echo = F}
+#Example plot of score distribution on chromosomes and called LADs (by me).
+#Paper doesent state exact parameters used, I presumed defaults for the peak calling weighted by fragment width and then #varied the threshold until I got 18,6% of genes (around 3700 in resting and activated) classifed as overlapping LADs as #they have in the paper (for the numbers to match this have to be protein coding genes only. 
+#Additionaly they say its genes "within" LADs but the only way to get 18.6% and 3700 at the same time is to count any #overlap between genes and LADs). I also marked segements with segemntation lower than -2 (meaning much higher Dam signal #compared to Dam-fusion).
+```
+\newpage 
+```{r,echo = FALSE,eval = F}
 
 
 dfg <- segments.df[segments.df$seg.mean >=high_thresh,]
@@ -188,10 +190,7 @@ seg_a <- segmentator(df_rest)
 saveRDS(list(seg_a,seg_r),"Segments_list.rds")
 ```
 
-
-Exact overlaps for all Robson LADs and Nup62KO integrations
-
-```{r, echo = FALSE}
+```{r, echo = FALSE, results = FALSE}
 # load in the above prepared segmented 
 seg_list <- readRDS("Segments_list.rds")
 seg_a <- seg_list[1]
@@ -261,10 +260,8 @@ nups <- nups[!is.na(integration_start)]
 rm(test1,test2)
 ```
 
+# **Overlaps between Nup 62KO integrations and LADs**
 
-Overlaps between Nup 62KO integrations and LADs
- 
- 
 ```{r,echo = FALSE}
 
 # load the random integration data as well at some point
@@ -356,7 +353,9 @@ RMC[,type3:=paste0(type,"_RMC_",rmc)]
 
 ```
 
- Count and proportion plots with and without KO153 / Random matched controls
+## Count and proportion plots with and without KO153 / Random matched controls
+
+I'm testing three types of RMCs; the old ones, completely random and covariate that should follow integration data GC content and chromosome distribution
 
 ```{r,echo = FALSE}
 # Initial simple graphs
@@ -369,13 +368,14 @@ ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activat
             vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+RMC<-RMC[sample(.N,nrow(over)),]
 
 # same as above but with RMC
 ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
 , aes(fill=LAD_binary, x=cellType)) + 
   geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
             vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
-  geom_bar(data = RMC, aes(x = type3, fill = LAD_binary), inherit.aes = F)+
+  geom_bar(data = RMC,position = position_stack(reverse = TRUE), aes(x = type3, fill = LAD_binary), inherit.aes = F)+
    geom_text(data = RMC,stat = "count", aes(label = ..count..,x = type3, fill = LAD_binary), inherit.aes = F,vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1))+
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
@@ -432,9 +432,9 @@ ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activat
 #  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
 ```
+\newpage
 
-Realtive insertion location plots for HIV integration within LADs.
-Seem relatively uniform, just covariate RMCs behaving weirdly at LAD start sites, which is expected due to GC content of LADs? (covariate RMCs are made to be similar to integration sites in GC content and chromosomal ratios).
+Realtive insertion location plots for HIV integration within LADs. Seem relatively uniform, just covariate RMCs behaving weirdly at LAD start sites, which is expected due to GC content of LADs? (covariate RMCs are made to be similar to integration sites in GC content and chromosomal ratios).
 
 ```{r,echo = FALSE}
 over[,rel_pos:= (integration_start - loc.start)/(loc.end-loc.start)]
@@ -461,10 +461,11 @@ aes(x = rel_pos, fill = type3)) +
                       theme_minimal()
 ```
 
-Non_genic vs genic inside and outside LADs
+## Non_genic vs genic inside and outside LADs
 
-```{r}
+```{r,echo  =F}
 # add genic status to RmC
+setkey(RMC,seqnames,start,end)
 RMC <- foverlaps(RMC,genes)
 RMC[,isGenic:=ifelse(is.na(ensembl_gene_id),"Nongenic","Genic")]
 RMC[,genic_split := paste0("RMC_",isGenic,"_",rmc)]
@@ -505,15 +506,12 @@ ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activat
         xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 90, vjust = 0, hjust=0.5))
         
 ```
+\newpage
 
-Feature-anchored frequency plot? or whatever
+## Violin plots of expression for genic integrations and LAD status
 
-```{r}
-
-```
-
-Violin plots of expression for genic integrations and LAD status
-    Note this is only expression data from genes we have integrations in
+## 
+[]
 ```{r,echo = FALSE}
 ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),], aes(x = cellType, y = log2(variance_norm_counts+1),fill = LAD_binary)) +
   geom_violin(trim =T) +
@@ -553,8 +551,7 @@ ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activat
 #  continued below after expression dataset load
 ```
 
-Same as above but added RMCs (GC cov only for spacing reasons. Generally look the same)
-If plot doesent separate experimental samples that means mock and KO153 are excluded:
+### Same as above but added RMCs (GC cov only for spacing reasons. Generally look the same) If plot doesent specify experimental samples that means mock and KO153 are excluded:
 
 ```{r, echo = FALSE}
 # get all the expressioin data
@@ -618,9 +615,9 @@ ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activat
 
 ```
 
-Comparison of all genes we have expression data for, by LAD/integration status
+## Comparison of all genes we have expression data for, by LAD/integration status
 
-```{r}
+```{r, echo = FALSE}
 ggplot(norms, aes(x = type, y = log2(variance_norm_counts+1),fill = LAD_status)) +
   geom_violin(trim =T) +
                 labs(x = "Group", y = "Expression(log2 var norm count)",
@@ -630,20 +627,7 @@ ggplot(norms, aes(x = type, y = log2(variance_norm_counts+1),fill = LAD_status))
                                                                                                                                                                                                                                                                                                                                                                   scale_fill_brewer(palette="Blues", direction = 1)  
 ```
 
-Genic unique and separate integrations
-
-
-Generalized uniqueness (unique in certain base window, regardless of being in gene or not)
-
-Heatmaps relative to rloops etc..
-
-
-```{r}
-
-```
-
-Comparison with DamID data from Belmont
-
+# Comparison with DamID data from Belmont
 
 ```{r, include = FALSE}
 library(easylift)
@@ -681,16 +665,12 @@ tots19 <- tots19 %>%
   slice_max(width) %>%
   as.data.table()
 
-
+setkey(tots19,seqnames, start,end)
 ```
 
-LAD overlap Belmont vs Robson (both DamID)
-   The Robson method (atleast the way I tried to reconstruct it) of calling LADs from DamID peaks using circular binary segmentation results in more numerous, smaller LADs being called than in Belmon, where they bin the genome and just calculate a cumulative fold change od LmnB1-Dam over Dam for the bins, resulting in wider calls.
-The results are pretty similar: around 80% of Robson Jurkat LADs are overlapping with Belmont K562 LADs,
-and around 90% of Belmont LADs overlap Robson LADs.
-As expected more integrations fall in the bigger Belmont LADs, but the various ratios between groups remain the same:
+LAD overlap Belmont vs Robson (both DamID) The Robson method (atleast the way I tried to reconstruct it) of calling LADs from DamID peaks using circular binary segmentation results in more numerous, smaller LADs being called than in Belmon, where they bin the genome and just calculate a cumulative fold change od LmnB1-Dam over Dam for the bins, resulting in wider calls. The results are pretty similar: around 80% of Robson Jurkat LADs are overlapping with Belmont K562 LADs, and around 90% of Belmont LADs overlap Robson LADs. As expected more integrations fall in the bigger Belmont LADs, but the various ratios between groups remain the same:
 
-```{r,echo = FALSE}
+```{r,echo = FALSE, results = F}
 
 gr1 <- makeGRangesFromDataFrame(lads, keep.extra.columns = TRUE)
 gr1 <- gr1[gr1$LAD_binary == "LAD"]
@@ -764,11 +744,9 @@ ggplot(df2, aes(x = Set, y = Count, fill = Category)) +
 
 ```
 
-
-
 ```{r,echo =FALSE}
 #repeat some graphs just to get the point across
-setkey(tots19,seqnames, start,end)
+
 setkey(nups,chr_name,integration_start,integration_end)
 # complete overlp here, no integrations land in the spaces without LAD data
 over2 <- foverlaps(nups,tots19)
@@ -796,9 +774,9 @@ ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activa
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 ```
 
-Cross comparison of integrations in Belmont and Robson LAD data
+### Cross comparison of integrations in Belmont and Robson LAD data
 
-```{r,echo = FALSE}
+```{r,echo = FALSE,results = F}
 # get a new table to cross reference all this 
 # modified so that we dont end up with something unrecognisable as columns in a huge table
 # 1. add unique id to nups table
@@ -845,9 +823,9 @@ ggplot(over3, aes(x = set, fill = set)) +
 rm(df,df2,gr1,gr2,gr1r,gr1a,hits,gr1_overlap,gr2_overlap)
 ```
 
+\newpage
 
-Belmont TAS-seq speckle data (SPAD peaks called on 25kb segments)
-   These are pretty scarce datapoints so theres not many integrations in them. 
+Belmont TAS-seq speckle data (SPAD peaks called on 25kb segments) These are pretty scarce datapoints so theres not many integrations in them.
 
 ```{r,echo = FALSE}
 # load in the presumed speckle associated data
@@ -879,14 +857,14 @@ over4[is.na(type),type:="Not in SPAD"]
 
 ggplot(over4[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
 , aes(fill=type, x=group)) + 
-  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs SPAD peaks")+
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
 # comapre just the two types
 ggplot(over4[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153") & type !="Not in SPAD",]
 , aes(fill=type, x=group)) + 
-  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs SPAD peaks")+
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 # is this significan?
@@ -908,14 +886,11 @@ ggplot(over4[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activa
 
 rm(over4,RMC2)
 ```
+\newpage
 
-Integrations vs Belmont SPIN classification of intranuclear localization (combined use of TAS,DamID and Hi-C)
-  This classification method widens the Spackle associated domains compared to the raw peak to integration overlap above.
-  (NANs are regions that are present but not classified in Belmont data).
+Integrations vs Belmont SPIN classification of intranuclear localization (combined use of TAS,DamID and Hi-C) This classification method widens the Spackle associated domains compared to the raw peak to integration overlap above. (NANs are regions that are present but not classified in Belmont data).
 
-
-
-```{r,echo =FALSE}
+```{r,echo =FALSE,results =F}
 # big table
 table(tots19$spin,tots19$lads)
  blue_palette <- colorRampPalette(c("azure", "dodgerblue4", "navy"))(11)
@@ -956,34 +931,30 @@ ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activa
 
 ```
 
-Why all the differences when using CG content covariate RMCs compared to fully random points or the bedwell method of creating a pool of sonication sized fragments?
-  - Belmont Spackle SPIN domains have on average 50% GC
-  - integrations and therefore covariates based on GC content have around 44%
-  - For example interior_Act1 SPIN domain has 45% GC
-  - Randomly sampling on hg19 gives around 38% GC
-Possible conclusion: Controlling for GC content in RMC creation here causes avoidance or bias to/agianst some SPIN domains,
-if there is more/less integrations in Spackle or LAD domains it is not due to GC content.
+Why all the differences when using CG content covariate RMCs compared to fully random points or the bedwell method of creating a pool of sonication sized fragments etc.? - Belmont Spackle SPIN domains have on average 50% GC - integrations and therefore covariates based on GC content have around 44% - For example interior_Act1 SPIN domain has 45% GC - Fully random points gives around 38% GC Possible conclusion: Controlling for GC content in RMC creation here causes avoidance or bias to/agianst some SPIN domains, if there is more/less integrations in Spackle or LAD domains it is not due to GC content alone.
 
-```{r,echo = FALSE}
+```{r,echo = FALSE, eval = FALSE}
 # get CG frequencies for LADs, SPINs and for NUP integrations
 np <- nups[,c(2,3,4)]
 colnames(np) <- c("seqnames","start","end")
 nups_gr <- makeGRangesFromDataFrame(np)
 nups_ia1 <- makeGRangesFromDataFrame(tots19[spin == "Interior_Act1", ])
 nups_sp <- makeGRangesFromDataFrame(tots19[spin == "Speckle",])
+nups_lam <- makeGRangesFromDataFrame(tots19[spin == "Lamina",])
 # add also the random ones
 rand <- makeGRangesFromDataFrame(RMC[rmc == "old",c(1,10,11)])
 
 nups_seq<- getSeq(BSgenome.Hsapiens.UCSC.hg19, nups_gr)
 intact1_seq<- getSeq(BSgenome.Hsapiens.UCSC.hg19, nups_ia1)
 spackle_seq<- getSeq(BSgenome.Hsapiens.UCSC.hg19, nups_sp)
+lam <- getSeq(BSgenome.Hsapiens.UCSC.hg19, nups_lam)
 rand_seq<- getSeq(BSgenome.Hsapiens.UCSC.hg19, rand)
 
 gc_content_rand <- mean(rowSums(alphabetFrequency(rand_seq)[, c("G", "C")]) / width(rand_seq)) * 100
 gc_content_ints <- mean(rowSums(alphabetFrequency(nups_seq)[, c("G", "C")]) / width(nups_seq)) * 100
 gc_content_inta1 <- mean(rowSums(alphabetFrequency(intact1_seq)[, c("G", "C")]) / width(intact1_seq)) * 100
 gc_content_spa <- mean(rowSums(alphabetFrequency(spackle_seq)[, c("G", "C")]) / width(spackle_seq)) * 100
-
+ mean(rowSums(alphabetFrequency(lam)[, c("G", "C")]) / width(lam)) * 100
 
 gc_content_ints
 gc_content_inta1
@@ -991,9 +962,154 @@ gc_content_spa
 gc_content_rand
 ```
 
-Unique vs in common genic integrations
+### Unique vs in common genic integrations
+
+First split by being in both Activated and Resting cells:
+
+```{r,echo = FALSE}
+ngenic <- nups[isGenic == "Genic"]
+ngenic <- ngenic[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+# separate by both group and cell type
+ngenic[, `:=`(
+  count_total = .N,
+  in_both_classes = uniqueN(cellType) >= 2
+), by = ensembl_gene_id][
+  , count_in_celltype := .N, by = .(ensembl_gene_id, cellType)
+][
+  , count_in_group := .N, by = .(ensembl_gene_id, group)
+][
+  ,in_all_groups := uniqueN(group) >= 4, by = ensembl_gene_id
+]
+
+setkey(ngenic,chr_name,integration_start,integration_end)
+# complete overlp here, no integrations land in the spaces without LAD data
+over5 <- foverlaps(ngenic,tots19)
+over5[is.na(spin),spin:="Not in Belmont data"]
 
 
-```{r}
-ngenic <- 
+
+ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=cellType)) + 
+  geom_bar(stat = "count",position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by being unique or in common to cell types")+ facet_wrap(~in_both_classes)+
+      scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+            xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=group)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by being unique or in common to cell types")+facet_wrap(~in_both_classes)+
+    scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+      xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+
+```
+\newpage
+Split on the basis of being in all 4 groups:
+
+```{r,echo = FALSE}
+ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=cellType)) + 
+  geom_bar(stat = "count",position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by being present in all 4 groups")+ facet_wrap(~in_all_groups)+
+      scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+            xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=group)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by being present in all 4 groups")+facet_wrap(~in_all_groups)+
+    scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+      xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+```
+\newpage
+
+Divided based on number of integrations in same gene Definite skew towards Speckles in genes with higher number of repeat integrations and away from Lm1 When compared to RMCs biggest outlier is Lamina, logicaly because it is the largest group in the Belmont SPIN dataset by number of segments.
+
+```{r,echo = FALSE,results = F}
+# make some splits on total count
+over5[,totals:= ifelse(count_total <2,"unique (4335)",
+                ifelse(count_total >=2 & count_total <10, "2-10 (18594)",
+                ifelse(count_total <20 & count_total >=10,">10 (4437)",
+                ifelse(count_total >=20 & count_total < 40,">=20 (2185)",
+                ifelse(count_total >=40, ">=40 (585)","error")) )))]
+
+ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=cellType)) + 
+  geom_bar(stat = "count",position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by repeated number of integrations in same gene")+ facet_wrap(~totals)+
+      scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+            xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+
+ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=group)) + 
+  geom_bar(stat = "count",position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by repeated number of integrations in same gene")+ facet_wrap(~totals)+
+      scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+            xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
+
+over5[,totals_by_group:= ifelse(count_in_group <2,"unique",
+                ifelse(count_in_group >=2 & count_in_group <5, "2-5",
+                ifelse(count_in_group <11 & count_in_group >=5,"5-10",
+                ifelse(count_in_group >=10 & count_in_group < 15,"10-15",
+                ifelse(count_in_group >=15, ">=15","error")) )))]
+
+ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=group)) + 
+  geom_bar(stat = "count",position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by repeated number of integrations in same gene within that group")+ facet_wrap(~totals_by_group)+
+        scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+                    xlab("")+ylab("")+ theme(axis.text.x = element_text(angle =90, vjust = 0.8, hjust=0.5))
+
+
+# different type of graph without groupping them together maybe with whiskers as well
+ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=group, y= (count_total))) + #coord_cartesian(ylim = quantile(over5$count_total, c(0.05, 0.95)))+
+  geom_boxplot()+ theme_minimal() + ylab("Number of integrations in gene")+#ggtitle("All genic integrations vs SPIN states, \n split by repeated number of integrations in same gene within that group")+ #facet_wrap(~totals_by_group)+
+                scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+                                                                        xlab("")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
+ ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=group, y= log(count_total))) + #coord_cartesian(ylim = quantile(over5$count_total, c(0.05, 0.95)))+
+  geom_boxplot()+ theme_minimal() + ylab("log( Number of integrations in gene )")+#ggtitle("All genic integrations vs SPIN states, \n split by repeated number of integrations in same gene within that group")+ #facet_wrap(~totals_by_group)+
+                scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+                                                                        xlab("")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))                                                                       
+
+# a lil two way anova
+anchovy <- aov(count_total ~ spin * group, data =over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),] )
+summary(anchovy)
+# anova not fully appropriate (data non normal - count data), but large enough that it porbably doesent matter
+
+# add in our RMCs?
+RMCx <- foverlaps(RMC,tots19)
+RMCx[is.na(spin),spin:="Not in Belmont data"]
+setkey(RMCx,seqnames, i.start,i.end)
+RMCx <- foverlaps(RMCx,genes)
+RMCx <- RMCx[!is.na(ensembl_gene_id),]
+# reduce numerousnerss
+RMCx <- RMCx[sample(.N,nrow(over5),replace = T),]
+RMCx[,count_total := .N, by = ensembl_gene_id]
+
+ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+, aes(fill=spin, x=cellType, y= log(count_total))) + #coord_cartesian(ylim = quantile(over5$count_total, c(0.05, 0.95)))+
+  geom_boxplot()+
+    geom_boxplot(data = RMCx[rmc == "old",], aes(fill = spin,y = log(count_total), x= type2))+
+       theme_minimal() + ylab("log (Number of integrations in gene)")+ggtitle("All genic integrations vs SPIN states, \n split by repeated number of integrations in same gene within that group")+ #facet_wrap(~totals_by_group)+
+                         scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+                                                                                                                   xlab("")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
+                                                                                                         
+```
+\newpage 
+
+## Comparison of integration patterns in both sets of data with our expression data. Our expression values vs genic integration counts and spin classification by count and mean count of number of integrations into the same gene
+
+```{r, echo = FALSE}
+ ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+  , aes( y=variance_norm_counts, x= count_total)) + #coord_cartesian(ylim = quantile(over5$count_total, c(0.05, 0.95)))+
+   geom_bin2d() +
+     facet_grid(spin ~ group)+xlab("Number of genic integrations")+ylab("Variance normalized counts")
+
+# same thing but mean
+summary_df <- over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),] %>%
+  group_by(spin,group,variance_norm_counts) %>%           # group by your categories
+  summarise(mean_count = mean(count_total),   # calculate mean of numeric var
+            .groups = "drop")  
+
+ggplot(summary_df, aes(y = variance_norm_counts, x = mean_count,
+                       color = mean_count)) +
+  geom_point(size = 3, alpha = 0.8)+ facet_grid(spin~ group)
+             
 ```
