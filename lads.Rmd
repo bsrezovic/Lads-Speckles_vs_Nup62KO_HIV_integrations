@@ -469,42 +469,93 @@ setkey(RMC,seqnames,start,end)
 RMC <- foverlaps(RMC,genes)
 RMC[,isGenic:=ifelse(is.na(ensembl_gene_id),"Nongenic","Genic")]
 RMC[,genic_split := paste0("RMC_",isGenic,"_",rmc)]
+
+RMC$group <- "RMC" # add a grouping variable to RMC so that the facet wraps arent fugly
+over_s <- over[,c(8,16,21)]
+RMC_s <- RMC[,c(11,15,18)]
+colnames(RMC_s) <- c("LAD_binary","group","isGenic")
+over_ss <- rbind(over_s,RMC_s) 
+over_ss[group =="rand",]$group <- "Random RMC"
+over_ss[group =="covariate",]$group <- "GC covariate RMC"
+over_ss[group =="old",]$group <- "Bedwell RMC"
 #counts
-ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+pl1 <- ggplot(over[!group%in%c("Resting_mock","Activated_mock"),]
 , aes(fill=LAD_binary, x=isGenic)) + 
-  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", aes(label = ..count..),
-            vjust = -0.3) +
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All integrations vs LADs")+geom_text_repel(stat = "count",position = position_stack(reverse = TRUE), aes(label = ..count..),
+                          vjust = 0.9) +facet_wrap(~group)+  coord_cartesian(ylim = c(0, 10000))+
+                                                                         scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+                                                                                                                            xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=0.5))
+
+                                                                                                                                       pl1
+                                                                                                                                                           #without KO153
+pl2 <- ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=isGenic)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+geom_text(stat = "count", vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1), aes(label = ..count..),
+                          vjust = 0.9) +facet_wrap(~group)+  coord_cartesian(ylim = c(0, 10000))+
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
-  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+                            xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=0.5))
+pl2
 
-ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+
+pl5 <- ggplot(over_ss[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
 , aes(fill=LAD_binary, x=isGenic)) + 
-  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
-      geom_text(stat = "count", aes(label = ..count..),
-                        vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
-    geom_bar(data = RMC, aes(x = genic_split, fill = LAD_binary),position = position_stack(reverse = TRUE))+ 
-                                                                  geom_text(data = RMC,stat = "count", aes(label = ..count..,x = genic_split, fill = LAD_binary), inherit.aes = F,vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1))+
-                                                                                          scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
-                                                                                                                                   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
-
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations with RMCs vs LADs")+facet_wrap(~group)+  coord_cartesian(ylim = c(0, 10000))+
+        geom_text(stat = "count", aes(label = ..count..),
+                                vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+                                   
+                                                                                                                                                                                                scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+                                                                                                                                                                              xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+pl5
+pl6 <- ggplot(over_ss[!group%in%c("Resting_mock","Activated_mock"),]
+, aes(fill=LAD_binary, x=isGenic)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All integrations with RMCs vs LADs")+facet_wrap(~group)+  coord_cartesian(ylim = c(0, 10000))+
+        geom_text_repel(stat = "count", aes(label = ..count..),
+                                position = position_stack(reverse = TRUE)) +
+                                   
+                                                                                                                                                                                                scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+                                                                                                                                                                              xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+pl6
                                                     #proportions
-ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
-, aes(fill=LAD_binary, x=isGenic)) + 
-  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
-  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
-  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+pl3 <- ggplot(over[!group%in%c("Resting_mock","Activated_mock"),]
+                                                    , aes(fill=LAD_binary, x=isGenic)) + 
+                                                      geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All integrations vs LADs")+
+                                                        scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+facet_wrap(~group)+
+                                                          xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
+pl3
 
+pl4 <- ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+                                                    , aes(fill=LAD_binary, x=isGenic)) + 
+                                                      geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+#ylim(c(0,8000))+
+                                                        scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+facet_wrap(~group)+
+                                                          xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+pl4
   # here add random matched controls into the mix, thus separating
 
                                                       #proportions
-ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
-, aes(fill=LAD_binary, x=isGenic)) + 
-  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
-    geom_bar(data = RMC, aes(x = genic_split, fill = LAD_binary),position ="fill")+ 
+pl7 <- ggplot(over_ss[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=isGenic)) + facet_wrap(~group)+
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations with RMCs vs LADs")+
       scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
         xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 90, vjust = 0, hjust=0.5))
-        
+pl7       
+pl8 <- ggplot(over_ss[!group%in%c("Resting_mock","Activated_mock"),]
+, aes(fill=LAD_binary, x=isGenic)) + facet_wrap(~group)+
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All integrations with RMCs vs LADs")+
+      scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+        xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 90, vjust = 0, hjust=0.5))
+pl8       
+
+pdf("genic_split_full.pdf", height=6, width=8)
+pl1
+pl2
+pl5
+pl6
+pl3
+pl4
+pl7
+pl8
+
+dev.off()
 ```
 \newpage
 
@@ -766,12 +817,21 @@ ggplot(over2[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activa
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
 # split up by sample
-ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+ggplot(over2[!group%in%c("Resting_mock","Activated_mock"),]
 , aes(fill=LAD_binary, x=group)) + 
   geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs Belmont LADs")+geom_text(stat = "count", aes(label = ..count..),
             vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1))  +
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+
+
+p1 <- ggplot(over2[!group%in%c("Resting_mock","Activated_mock"),]
+, aes(fill=LAD_binary, x=group)) + 
+  geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs Belmont LADs")+#geom_text(stat = "count", aes(label = ..count..),
+           # vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1))  +
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
+p1
 ```
 
 ### Cross comparison of integrations in Belmont and Robson LAD data
@@ -902,12 +962,12 @@ ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activa
     scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
       xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
-ggplot(over2[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+p2 <- ggplot(over2[!group%in%c("Resting_mock","Activated_mock"),]
 , aes(fill=spin, x=group)) + 
   geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs SPIN states")+
     scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
       xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
-
+p2
 
 # add RMCs
 RMC3 <- foverlaps(RMC,tots19)
@@ -968,7 +1028,7 @@ First split by being in both Activated and Resting cells:
 
 ```{r,echo = FALSE}
 ngenic <- nups[isGenic == "Genic"]
-ngenic <- ngenic[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+ngenic <- ngenic[!group%in%c("Resting_mock","Activated_mock"),]
 # separate by both group and cell type
 ngenic[, `:=`(
   count_total = .N,
@@ -994,13 +1054,13 @@ ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activa
       scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
             xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
-ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+p3 <- ggplot(over5[!group%in%c("Resting_mock","Activated_mock"),]
 , aes(fill=spin, x=group)) + 
   geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by being unique or in common to cell types")+facet_wrap(~in_both_classes)+
     scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
       xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
-
+p3
 ```
 \newpage
 Split on the basis of being in all 4 groups:
@@ -1012,7 +1072,7 @@ ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activa
       scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
             xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
-ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+p4 <- ggplot(over5[!group%in%c("Resting_mock","Activated_mock"),]
 , aes(fill=spin, x=group)) + 
   geom_bar(position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by being present in all 4 groups")+facet_wrap(~in_all_groups)+
     scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
@@ -1024,11 +1084,11 @@ Divided based on number of integrations in same gene Definite skew towards Speck
 
 ```{r,echo = FALSE,results = F}
 # make some splits on total count
-over5[,totals:= ifelse(count_total <2,"unique (4335)",
-                ifelse(count_total >=2 & count_total <10, "2-10 (18594)",
-                ifelse(count_total <20 & count_total >=10,">10 (4437)",
-                ifelse(count_total >=20 & count_total < 40,">=20 (2185)",
-                ifelse(count_total >=40, ">=40 (585)","error")) )))]
+over5[,totals:= ifelse(count_total <2,"unique (4549)",
+                ifelse(count_total >=2 & count_total <10, "2-10 (20405)",
+                ifelse(count_total <20 & count_total >=10,">10 (5684)",
+                ifelse(count_total >=20 & count_total < 40,">=20 (2785)",
+                ifelse(count_total >=40, ">=40 (813)","error")) )))]
 
 ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
 , aes(fill=spin, x=cellType)) + 
@@ -1037,12 +1097,12 @@ ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activa
             xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
 
-ggplot(over5[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activated_KO153"),]
+p5 <- ggplot(over5[!group%in%c("Resting_mock","Activated_mock"),]
 , aes(fill=spin, x=group)) + 
   geom_bar(stat = "count",position = "fill")+ theme_minimal() + ylab("Number of integrations")+ggtitle("All genic integrations vs SPIN states, \n split by repeated number of integrations in same gene")+ facet_wrap(~totals)+
       scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
             xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
-
+p5
 over5[,totals_by_group:= ifelse(count_in_group <2,"unique",
                 ifelse(count_in_group >=2 & count_in_group <5, "2-5",
                 ifelse(count_in_group <11 & count_in_group >=5,"5-10",
@@ -1112,4 +1172,12 @@ ggplot(summary_df, aes(y = variance_norm_counts, x = mean_count,
                        color = mean_count)) +
   geom_point(size = 3, alpha = 0.8)+ facet_grid(spin~ group)
              
+```
+
+
+```{r}
+pdf("genic_split.pdf", height=6, width=8)
+pl2
+
+dev.off()
 ```
