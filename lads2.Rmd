@@ -2,5 +2,130 @@
 
 ```{r,setup,echo=F, message=FALSE, warning=FALSE}
 
+load("lads1_workspace.RData")
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(GenomicRanges)
+library(biomaRt)
 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+## First the Robson data
+
+we have full coverage here (all Nup associated genes are covered by the Robson DamID data)
+```{r, echo = FALSE}
+# load the Nup related genes from before
+nupgenes <- as.data.table(read.csv("C:/Users/38598/Desktop/hivint/nup153/original_associated_genes.csv", sep = "\t"))
+
+# this is messy, lets redo it as a sanity check
+mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host    = 'grch37.ensembl.org')
+atts <- c(  "ensembl_gene_id",
+            "start_position",
+            "end_position",
+            "ensembl_transcript_id",
+            "ensembl_exon_id",
+            "exon_chrom_start",
+            "exon_chrom_end",
+            "chromosome_name")
+ngenes <- getBM(attributes = atts, mart = mart,filters = c("ensembl_gene_id"),
+                                                values=unique(nupgenes$ensembl_gene_id))
+ngenes <- as.data.table(ngenes)
+
+#  compute introsm
+introns <- ngenes %>%
+  arrange(ensembl_transcript_id, exon_chrom_start) %>%
+  group_by(ensembl_gene_id, ensembl_transcript_id) %>%
+  # pair exons to make introns = gaps between end and next start
+  mutate(
+    intron_start = lag(exon_chrom_end) + 1,
+    intron_end   = exon_chrom_start - 1
+  ) %>%
+  # drop NA (first exon has no preceding intron)
+  filter(!is.na(intron_start) & intron_start <= intron_end) %>%
+  select(
+    ensembl_gene_id,
+    ensembl_transcript_id,
+    start_position,
+    end_position,
+    intron_start,
+    intron_end,
+    chromosome_name
+  )
+
+introns <- as.data.table(introns)
+ngenes[, feature_type := "exon"]
+introns[, feature_type := "intron"]
+
+# 6) Standardize and select columns to combine
+exon_dt <- ngenes[, .(
+  ensembl_gene_id,
+  ensembl_transcript_id,
+  start_position,
+  end_position,
+  chromosome_name,
+  start  = exon_chrom_start,
+  end    = exon_chrom_end,
+  feature_type
+)]
+
+intron_dt <- introns[, .(
+  ensembl_gene_id,
+  ensembl_transcript_id,
+  start_position,
+  end_position,
+  chromosome_name,
+  start  = intron_start,
+  end    = intron_end,
+  feature_type
+)]
+
+# 7) Combine into one table
+combined_features <- rbind(exon_dt, intron_dt, fill=TRUE)
+
+# Optional: sort nicely
+setorder(
+  combined_features,
+  ensembl_gene_id,
+  ensembl_transcript_id,
+  start
+)
+
+ngenes <- combined_features
+rm(combined_features,introns,exon_dt)
+ngenes[,chromosome_name := paste0("chr",chromosome_name)]
+setkey(ngenes,chromosome_name,start,end)
+
+rladnups <- foverlaps(ngenes,lads)
+sum(is.na(rladnups$LAD_binary))  # we miss 42 times, just ignore those
+rladnups <- rladnups[!is.na(LAD_binary),]
+sum(is.na(rladnups$start))
+sum(!ngenes$ensembl_gene_id %in% rladnups$ensembl_gene_id)
+# so we have full coverage in the robson data, good
+
+# have to see overlap between integrations in Nup genes and LAD binary to see difference
+rladnups[, overlap_len := pmin(end, loc.end) - pmax(start, loc.start) + 1]
+rladnups[,lad_width := loc.end - loc.start +1]
+rladnups[,feature_width := end - start +1]
+
+#have to split now for clarity
+rladnups_act <- rladnups[type == "Activated",c(1,8,9,10,14,15,16,17,18,19)]
+rladnups_rest <- rladnups[type == "Resting",c(1,8,9,10,14,15,16,17,18,19)]
+
+rladnups_act[, bp_over_lad := sum(overlap_len), by=c("ensembl_gene_id","feature_type")]
+rladnups_rest[, bp_over_lad := sum(overlap_len), by=c("ensembl_gene_id","feature_type")]
+# theres some confusion here with exon and intron ids and different transcript calls for sure
+
+rladnups_act <- unique(rladnups_act)
+```
+
+
+```{r, echo = FALSE}
+# the actual plotting code thingy
+
+
+# plot first simply how much overlap there is then how much intronal / exconal
+# maybe some comment on GC content?
 ```
