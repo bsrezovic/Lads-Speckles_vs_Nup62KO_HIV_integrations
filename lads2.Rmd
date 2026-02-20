@@ -12,11 +12,12 @@ library(biomaRt)
 knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
 ```
 
+## Robson LADs first
 
+```{r, echo = FALSE}
 ## First the Robson data
 
-we have full coverage here (all Nup associated genes are covered by the Robson DamID data)
-```{r, echo = FALSE}
+#we have full coverage here (all Nup associated genes are covered by the Robson DamID data)
 # load the Nup related genes from before
 nupgenes <- as.data.table(read.csv("C:/Users/38598/Desktop/hivint/nup153/original_associated_genes.csv", sep = "\t"))
 
@@ -45,7 +46,7 @@ introns <- ngenes %>%
   ) %>%
   # drop NA (first exon has no preceding intron)
   filter(!is.na(intron_start) & intron_start <= intron_end) %>%
-  select(
+  dplyr::select(
     ensembl_gene_id,
     ensembl_transcript_id,
     start_position,
@@ -94,7 +95,7 @@ setorder(
 )
 
 ngenes <- combined_features
-rm(combined_features,introns,exon_dt)
+rm(combined_features,introns,exon_dt, intron_dt)
 ngenes[,chromosome_name := paste0("chr",chromosome_name)]
 setkey(ngenes,chromosome_name,start,end)
 
@@ -109,23 +110,71 @@ sum(!ngenes$ensembl_gene_id %in% rladnups$ensembl_gene_id)
 rladnups[, overlap_len := pmin(end, loc.end) - pmax(start, loc.start) + 1]
 rladnups[,lad_width := loc.end - loc.start +1]
 rladnups[,feature_width := end - start +1]
-
+rladnups[,gene_width := end_position- start_position +1] # this is with TSS, so differs from SUM of features here!!!
 #have to split now for clarity
-rladnups_act <- rladnups[type == "Activated",c(1,8,9,10,14,15,16,17,18,19)]
-rladnups_rest <- rladnups[type == "Resting",c(1,8,9,10,14,15,16,17,18,19)]
+rladnups_act <- rladnups[type == "Activated",c(1,8,9,10,14,15,16,17,18,19,20)]
+rladnups_rest <- rladnups[type == "Resting",c(1,8,9,10,14,15,16,17,18,19,20)]
 
 rladnups_act[, bp_over_lad := sum(overlap_len), by=c("ensembl_gene_id","feature_type")]
 rladnups_rest[, bp_over_lad := sum(overlap_len), by=c("ensembl_gene_id","feature_type")]
 # theres some confusion here with exon and intron ids and different transcript calls for sure
 
 rladnups_act <- unique(rladnups_act)
+
+act_1 = rladnups_act[, .(
+  # overall percentage of width where there is any LAD overlap
+  pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
+  # not this ignores TSS for now
+  
+  LAD_exon  = sum(feature_width * (LAD_binary == "LAD" & feature_type == "exon"))  / sum(feature_width) * 100,
+  LAD_intron = sum(feature_width * (LAD_binary == "LAD" & feature_type == "intron")) / sum(feature_width) * 100
+
+), by = ensembl_gene_id]
+
+rest_1 = rladnups_rest[, .(
+  # overall percentage of width where there is any LAD overlap
+  pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
+  # not this ignores TSS for now
+  
+  LAD_exon  = sum(feature_width * (LAD_binary == "LAD" & feature_type == "exon"))  / sum(feature_width) * 100,
+  LAD_intron = sum(feature_width * (LAD_binary == "LAD" & feature_type == "intron")) / sum(feature_width) * 100
+
+), by = ensembl_gene_id]
+
+act_1$LAD_type <- "Activated"
+rest_1$LAD_type <- "Resting"
+
+Robson_LADs_vs_Nups <- rbind(act_1,rest_1)
+
+rm(act_1,rest_1)
 ```
 
-
+1. Just a simple overlap of Nup related genes and LADs
 ```{r, echo = FALSE}
 # the actual plotting code thingy
+p1 <- ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
+, aes(fill=LAD_binary, x=cellType)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+  geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
 
-
+p1
 # plot first simply how much overlap there is then how much intronal / exconal
 # maybe some comment on GC content?
+```
+
+2. Overview of the interaction between intron/exon split in Nup genes and Robson LADs,
+as well as the GC content
+
+```{r}
+
+```
+
+3. Comparison of above with HIV integrations
+
+
+```{r}
+
 ```
