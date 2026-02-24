@@ -36,65 +36,68 @@ ngenes <- getBM(attributes = atts, mart = mart,filters = c("ensembl_gene_id"),
 ngenes <- as.data.table(ngenes)
 
 #  compute introsm
-introns <- ngenes %>%
-  arrange(ensembl_transcript_id, exon_chrom_start) %>%
-  group_by(ensembl_gene_id, ensembl_transcript_id) %>%
-  # pair exons to make introns = gaps between end and next start
-  mutate(
-    intron_start = lag(exon_chrom_end) + 1,
-    intron_end   = exon_chrom_start - 1
-  ) %>%
-  # drop NA (first exon has no preceding intron)
-  filter(!is.na(intron_start) & intron_start <= intron_end) %>%
-  dplyr::select(
+introner <- function(ngenes){
+  introns <- ngenes %>%
+    arrange(ensembl_transcript_id, exon_chrom_start) %>%
+    group_by(ensembl_gene_id, ensembl_transcript_id) %>%
+    # pair exons to make introns = gaps between end and next start
+    mutate(
+      intron_start = lag(exon_chrom_end) + 1,
+      intron_end   = exon_chrom_start - 1
+    ) %>%
+    # drop NA (first exon has no preceding intron)
+    filter(!is.na(intron_start) & intron_start <= intron_end) %>%
+    dplyr::select(
+      ensembl_gene_id,
+      ensembl_transcript_id,
+      start_position,
+      end_position,
+      intron_start,
+      intron_end,
+      chromosome_name
+    )
+
+  introns <- as.data.table(introns)
+  ngenes[, feature_type := "exon"]
+  introns[, feature_type := "intron"]
+
+  # 6) Standardize and select columns to combine
+  exon_dt <- ngenes[, .(
     ensembl_gene_id,
     ensembl_transcript_id,
     start_position,
     end_position,
-    intron_start,
-    intron_end,
-    chromosome_name
+    chromosome_name,
+    start  = exon_chrom_start,
+    end    = exon_chrom_end,
+    feature_type
+  )]
+
+  intron_dt <- introns[, .(
+    ensembl_gene_id,
+    ensembl_transcript_id,
+    start_position,
+    end_position,
+    chromosome_name,
+    start  = intron_start,
+    end    = intron_end,
+    feature_type
+  )]
+
+  # 7) Combine into one table
+  combined_features <- rbind(exon_dt, intron_dt, fill=TRUE)
+  
+
+  # Optional: sort nicely
+  setorder(
+    combined_features,
+    ensembl_gene_id,
+    ensembl_transcript_id,
+    start
   )
-
-introns <- as.data.table(introns)
-ngenes[, feature_type := "exon"]
-introns[, feature_type := "intron"]
-
-# 6) Standardize and select columns to combine
-exon_dt <- ngenes[, .(
-  ensembl_gene_id,
-  ensembl_transcript_id,
-  start_position,
-  end_position,
-  chromosome_name,
-  start  = exon_chrom_start,
-  end    = exon_chrom_end,
-  feature_type
-)]
-
-intron_dt <- introns[, .(
-  ensembl_gene_id,
-  ensembl_transcript_id,
-  start_position,
-  end_position,
-  chromosome_name,
-  start  = intron_start,
-  end    = intron_end,
-  feature_type
-)]
-
-# 7) Combine into one table
-combined_features <- rbind(exon_dt, intron_dt, fill=TRUE)
-
-# Optional: sort nicely
-setorder(
-  combined_features,
-  ensembl_gene_id,
-  ensembl_transcript_id,
-  start
-)
-
-ngenes <- combined_features
+  return(combined_features)
+}
+ngenes <- introner(ngenes)
 rm(combined_features,introns,exon_dt, intron_dt)
 ngenes[,chromosome_name := paste0("chr",chromosome_name)]
 setkey(ngenes,chromosome_name,start,end)
@@ -122,6 +125,8 @@ rladnups_rest[, bp_over_lad := sum(overlap_len), by=c("ensembl_gene_id","feature
 rladnups_act <- unique(rladnups_act)
 
 act_1 = rladnups_act[, .(
+  # keep gene width for normalizing
+  gene_width = mean(gene_width),
   # overall percentage of width where there is any LAD overlap
   pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
   # not this ignores TSS for now
@@ -132,6 +137,8 @@ act_1 = rladnups_act[, .(
 ), by = ensembl_gene_id]
 
 rest_1 = rladnups_rest[, .(
+  # keep gene width for normalizing
+  gene_width = mean(gene_width),
   # overall percentage of width where there is any LAD overlap
   pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
   # not this ignores TSS for now
@@ -141,34 +148,166 @@ rest_1 = rladnups_rest[, .(
 
 ), by = ensembl_gene_id]
 
-act_1$LAD_type <- "Activated"
-rest_1$LAD_type <- "Resting"
+act_1$LAD_type <- "Activated Nup"
+rest_1$LAD_type <- "Resting Nup"
 
 Robson_LADs_vs_Nups <- rbind(act_1,rest_1)
 
 rm(act_1,rest_1)
+
+# compared to a random selection of genes?
+#        wast majority are protein coding genes so compare to that
+#   genes table from lads.Rmd was alread protins only
+# we can sample it and then get the extra columns fro mbiomart to avoid strain
+set.seed(123)
+genes_rand <- genes[sample(1:nrow(genes), length(unique(nupgenes$ensembl_gene_id)))]
+
+atts <- c( "ensembl_gene_id",
+            "start_position",
+            "end_position",
+            "ensembl_transcript_id",
+            "ensembl_exon_id",
+            "exon_chrom_start",
+            "exon_chrom_end",
+            "chromosome_name")
+genes_rand <- getBM(attributes = atts, mart = mart,filters = c("ensembl_gene_id"),
+                                                values=unique(genes_rand$ensembl_gene_id))
+genes_rand <- as.data.table(genes_rand)
+genes_rand <- introner(genes_rand)
+genes_rand[,chromosome_name := paste0("chr",chromosome_name)]
+setkey(genes_rand,chromosome_name,start_position,end_position)
+genes_rand <- foverlaps(genes_rand,lads)
+
+sum(is.na(genes_rand$LAD_binary))  #  great
+
+genes_rand[, overlap_len := pmin(end, loc.end) - pmax(start, loc.start) + 1]
+genes_rand[,lad_width := loc.end - loc.start +1]
+genes_rand[,feature_width := end - start +1]
+genes_rand[,gene_width := end_position- start_position +1] # this is with TSS, so differs from SUM of 
+rand_act <- genes_rand[type == "Activated",c(1,8,9,10,14,15,16,17,18,19,20)]
+rand_rest <- genes_rand[type == "Resting",c(1,8,9,10,14,15,16,17,18,19,20)]
+
+rand_act = rand_act[, .(
+  # keep gene width for normalizing
+  gene_width = mean(gene_width),
+  # overall percentage of width where there is any LAD overlap
+  pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
+  # not this ignores TSS for now
+  
+  LAD_exon  = sum(feature_width * (LAD_binary == "LAD" & feature_type == "exon"))  / sum(feature_width) * 100,
+  LAD_intron = sum(feature_width * (LAD_binary == "LAD" & feature_type == "intron")) / sum(feature_width) * 100
+
+), by = ensembl_gene_id]
+
+rand_rest = rand_rest[, .(
+  # keep gene width for normalizing
+  gene_width = mean(gene_width),
+  # overall percentage of width where there is any LAD overlap
+  pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
+  # not this ignores TSS for now
+  
+  LAD_exon  = sum(feature_width * (LAD_binary == "LAD" & feature_type == "exon"))  / sum(feature_width) * 100,
+  LAD_intron = sum(feature_width * (LAD_binary == "LAD" & feature_type == "intron")) / sum(feature_width) * 100
+
+), by = ensembl_gene_id]
+
+
+rand_act$LAD_type <- "Activated RMC"
+rand_rest$LAD_type <- "Resting RMC"
+
+Robson_LADs_vs_Nups_RMCs <- rbind(rand_act,rand_rest)
+
 ```
 
-1. Just a simple overlap of Nup related genes and LADs
+1. Overlap of Nup related genes and LADs
+
+If there is any overlap between Nup gene and LAD the data point is treated as LAD.
+RMCs are randomly chosen protein coding genes with sample size == 486.
 ```{r, echo = FALSE}
+Robson_LADs_vs_Nups[,isLAD := ifelse(pct_LAD > 0, "LAD","Not LAD")]
+
 # the actual plotting code thingy
-p1 <- ggplot(over[!group%in%c("Resting_mock","Activated_mock","Resting_KO153","Activated_KO153"),]
-, aes(fill=LAD_binary, x=cellType)) + 
-  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal() + ylab("Number of integrations")+ggtitle("All KO62 integrations vs LADs")+
+p1 <- ggplot(Robson_LADs_vs_Nups
+, aes(fill=isLAD, x=LAD_type)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal()+
   geom_text(stat = "count", aes(label = ..count..),
             vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
-  xlab("")+ylab("")+ theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))
-
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+  labs(x = "LAD cell type",
+       y = "",
+       fill = "",
+       title = "Any overlap: Nup genes vs LADs") 
 p1
-# plot first simply how much overlap there is then how much intronal / exconal
-# maybe some comment on GC content?
+
+
+
+# with added RMCs
+Robson_LADs_vs_Nups_RMCs[,isLAD := ifelse(pct_LAD > 0, "LAD","Not LAD")]
+withRMC <- rbind(Robson_LADs_vs_Nups,Robson_LADs_vs_Nups_RMCs)
+
+p2 <- ggplot(withRMC
+, aes(fill=isLAD, x=LAD_type)) + 
+  geom_bar(position = position_stack(reverse = TRUE))+ theme_minimal()+
+  geom_text(stat = "count", aes(label = ..count..),
+            vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+  labs(x = "LAD cell type",
+       y = "",
+       fill = "",
+       title = "Any overlap: Nup genes and random genes vs LADs") 
+p2
+
+# percent overlap
 ```
+
+Problem with above graphs: Nup genes are around 2x wider then an average random selection of protein coding genes. This cant explain the full difference but heres the same data but weighted by gene width.
+Adjusted overlap score is the number of bp that overlap LAD divided by total length of all genes in group (Nups or RMCs).
+The difference is less extreme but still statistically significant.
+
+```{r, echo = FALSE}
+plot3 <- withRMC[, .(
+  # keep gene width for normalizing
+  adjusted_overlap = gene_width * pct_LAD / sum(gene_width)
+  # overall percentage of width where there is any LAD overlap
+  
+), by = c("LAD_type")]
+
+p3 <- ggplot(plot3
+, aes(fill = LAD_type,x=LAD_type, y = adjusted_overlap)) + 
+  geom_boxplot()+
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+  labs(x = "LAD cell type",
+       y = "Adjusted overlap score",
+       fill = "",
+       title = "Adjusted overlap: Nup genes vs LADs") 
+p3
+
+```
+
+
 
 2. Overview of the interaction between intron/exon split in Nup genes and Robson LADs,
 as well as the GC content
 
+Percentatge overlap thats in exons for genes that have any overlap at all; the Nup gene overlap is mostly intronal: 
 ```{r}
+# calculate percentage of the overlap thats exonal
+Robson_LADs_vs_Nups[isLAD == "LAD",pct_exon := 100*LAD_exon /(LAD_exon + LAD_intron)]
+Robson_LADs_vs_Nups_RMCs[isLAD == "LAD",pct_exon := 100*LAD_exon /(LAD_exon + LAD_intron)]
+withRMC2 <- rbind(Robson_LADs_vs_Nups,Robson_LADs_vs_Nups_RMCs)
+p4 <- ggplot(withRMC2
+, aes(y = (pct_exon), x=LAD_type)) + 
+  geom_boxplot()+
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+  labs(x = "LAD cell type",
+       y = "Percent of exonal overlap",
+       fill = "",
+       title = "Any overlap: Nup genes vs LADs") 
+p4
 
 ```
 
@@ -178,3 +317,9 @@ as well as the GC content
 ```{r}
 
 ```
+
+\newpage
+
+## Belmont SPIN clasification vs Nup genes
+
+  qqa
