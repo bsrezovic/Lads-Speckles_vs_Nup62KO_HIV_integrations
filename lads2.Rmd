@@ -282,7 +282,7 @@ p3 <- ggplot(plot3
   labs(x = "LAD cell type",
        y = "Adjusted overlap score",
        fill = "",
-       title = "Adjusted overlap: Nup genes vs LADs") 
+       title = "Adjusted overlap: Nup genes vs LADs")+theme_minimal()+theme(legend.position = "none")
 p3
 
 ```
@@ -298,15 +298,15 @@ Percentatge overlap thats in exons for genes that have any overlap at all; the N
 Robson_LADs_vs_Nups[isLAD == "LAD",pct_exon := 100*LAD_exon /(LAD_exon + LAD_intron)]
 Robson_LADs_vs_Nups_RMCs[isLAD == "LAD",pct_exon := 100*LAD_exon /(LAD_exon + LAD_intron)]
 withRMC2 <- rbind(Robson_LADs_vs_Nups,Robson_LADs_vs_Nups_RMCs)
-p4 <- ggplot(withRMC2
-, aes(y = (pct_exon), x=LAD_type)) + 
+p4 <- ggplot(withRMC2[isLAD == "LAD",]
+, aes(y = (pct_exon), x=LAD_type, fill =LAD_type)) + 
   geom_boxplot()+
   scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
   theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
-  labs(x = "LAD cell type",
+  labs(x = "",
        y = "Percent of exonal overlap",
        fill = "",
-       title = "Any overlap: Nup genes vs LADs") 
+       title = "Nup genes overlaping LADs")+theme_minimal()+theme(legend.position = "none")
 p4
 
 ```
