@@ -1,3 +1,8 @@
+---
+title: "Lads vs Nups"
+output: pdf_document
+---
+
 # Comparison of Nup related genes and Robson LADs /  Belmont SPIN classification
 
 ```{r,setup,echo=F, message=FALSE, warning=FALSE}
@@ -14,7 +19,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 ## Robson LADs first
 
-```{r, echo = FALSE}
+```{r, echo = FALSE,results = F}
 ## First the Robson data
 
 #we have full coverage here (all Nup associated genes are covered by the Robson DamID data)
@@ -26,7 +31,8 @@ mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host    
 atts <- c(  "ensembl_gene_id",
             "start_position",
             "end_position",
-            "ensembl_transcript_id",
+           #"hgnc_symbol",
+           "ensembl_transcript_id",
             "ensembl_exon_id",
             "exon_chrom_start",
             "exon_chrom_end",
@@ -115,8 +121,8 @@ rladnups[,lad_width := loc.end - loc.start +1]
 rladnups[,feature_width := end - start +1]
 rladnups[,gene_width := end_position- start_position +1] # this is with TSS, so differs from SUM of features here!!!
 #have to split now for clarity
-rladnups_act <- rladnups[type == "Activated",c(1,8,9,10,14,15,16,17,18,19,20)]
-rladnups_rest <- rladnups[type == "Resting",c(1,8,9,10,14,15,16,17,18,19,20)]
+rladnups_act <- rladnups[type == "Activated",c(1,8,9,10,12,13,14,15,16,17,18,19,20)]
+rladnups_rest <- rladnups[type == "Resting",c(1,8,9,10,12,13,14,15,16,17,18,19,20)]
 
 rladnups_act[, bp_over_lad := sum(overlap_len), by=c("ensembl_gene_id","feature_type")]
 rladnups_rest[, bp_over_lad := sum(overlap_len), by=c("ensembl_gene_id","feature_type")]
@@ -126,6 +132,9 @@ rladnups_act <- unique(rladnups_act)
 
 act_1 = rladnups_act[, .(
   # keep gene width for normalizing
+  chromosome_name = unique(chromosome_name),
+  start_position = mean(start_position),
+  end_position = mean(end_position),
   gene_width = mean(gene_width),
   # overall percentage of width where there is any LAD overlap
   pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
@@ -138,6 +147,9 @@ act_1 = rladnups_act[, .(
 
 rest_1 = rladnups_rest[, .(
   # keep gene width for normalizing
+  chromosome_name = unique(chromosome_name),
+  start_position = mean(start_position),
+  end_position = mean(end_position),
   gene_width = mean(gene_width),
   # overall percentage of width where there is any LAD overlap
   pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
@@ -184,11 +196,14 @@ genes_rand[, overlap_len := pmin(end, loc.end) - pmax(start, loc.start) + 1]
 genes_rand[,lad_width := loc.end - loc.start +1]
 genes_rand[,feature_width := end - start +1]
 genes_rand[,gene_width := end_position- start_position +1] # this is with TSS, so differs from SUM of 
-rand_act <- genes_rand[type == "Activated",c(1,8,9,10,14,15,16,17,18,19,20)]
-rand_rest <- genes_rand[type == "Resting",c(1,8,9,10,14,15,16,17,18,19,20)]
+rand_act <- genes_rand[type == "Activated",c(1,8,9,10,12,13,14,15,16,17,18,19,20)]
+rand_rest <- genes_rand[type == "Resting",c(1,8,9,10,12,13,14,15,16,17,18,19,20)]
 
 rand_act = rand_act[, .(
   # keep gene width for normalizing
+  chromosome_name = unique(chromosome_name),
+  start_position = mean(start_position),
+  end_position = mean(end_position),
   gene_width = mean(gene_width),
   # overall percentage of width where there is any LAD overlap
   pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
@@ -201,6 +216,9 @@ rand_act = rand_act[, .(
 
 rand_rest = rand_rest[, .(
   # keep gene width for normalizing
+  chromosome_name = unique(chromosome_name),
+  start_position = mean(start_position),
+  end_position = mean(end_position),
   gene_width = mean(gene_width),
   # overall percentage of width where there is any LAD overlap
   pct_LAD = sum(feature_width * (LAD_binary == "LAD")) / sum(feature_width) * 100,
@@ -219,10 +237,12 @@ Robson_LADs_vs_Nups_RMCs <- rbind(rand_act,rand_rest)
 
 ```
 
-1. Overlap of Nup related genes and LADs
+### 1. Overlap of Nup related genes and LADs
 
 If there is any overlap between Nup gene and LAD the data point is treated as LAD.
 RMCs are randomly chosen protein coding genes with sample size == 486.
+
+
 ```{r, echo = FALSE}
 Robson_LADs_vs_Nups[,isLAD := ifelse(pct_LAD > 0, "LAD","Not LAD")]
 
@@ -289,11 +309,12 @@ p3
 
 
 
-2. Overview of the interaction between intron/exon split in Nup genes and Robson LADs,
-as well as the GC content
+### 2. Overview of the interaction between intron/exon split in Nup genes and Robson LADs.
 
 Percentatge overlap thats in exons for genes that have any overlap at all; the Nup gene overlap is mostly intronal: 
-```{r}
+
+
+```{r, echo = F}
 # calculate percentage of the overlap thats exonal
 Robson_LADs_vs_Nups[isLAD == "LAD",pct_exon := 100*LAD_exon /(LAD_exon + LAD_intron)]
 Robson_LADs_vs_Nups_RMCs[isLAD == "LAD",pct_exon := 100*LAD_exon /(LAD_exon + LAD_intron)]
@@ -306,20 +327,604 @@ p4 <- ggplot(withRMC2[isLAD == "LAD",]
   labs(x = "",
        y = "Percent of exonal overlap",
        fill = "",
-       title = "Nup genes overlaping LADs")+theme_minimal()+theme(legend.position = "none")
+       title = "Nup genes overlaping LAD - Intronal pct")+theme_minimal()+theme(legend.position = "none")
 p4
-
-```
-
-3. Comparison of above with HIV integrations
-
-
-```{r}
 
 ```
 
 \newpage
 
-## Belmont SPIN clasification vs Nup genes
+### 3. Comparison of above with HIV integrations
 
-  qqa
+More integrations i Nup genes than random gene sample. Also Robson LADs overlapping genes seem to have small increase in KO153 group integrations.
+
+The recurrent integrations graph isnt adjusted for different group sizes yet (NT is about te same size as KO62 and KO153 together by number of integrations). This is unlikely to explain all of the variance betwen them.
+
+No real difference in percentage of exonal integrations overlapping Activated or Resting LADs, but randomly selected genes have integratiosn fall in more exonal LAD overlaps.
+
+
+```{r, echo = FALSE}
+setkey(Robson_LADs_vs_Nups, chromosome_name, start_position, end_position)
+setkey(Robson_LADs_vs_Nups_RMCs, chromosome_name, start_position, end_position)
+
+rlnh_act <- foverlaps(Robson_LADs_vs_Nups[LAD_type == "Activated Nup"],nups[cellType == "Activated"] )
+rlnh_rest <- foverlaps(Robson_LADs_vs_Nups[LAD_type == "Resting Nup"],nups[cellType == "Resting"] )
+
+rlnh_act_RMC <- foverlaps(Robson_LADs_vs_Nups_RMCs[LAD_type == "Activated RMC"],nups[cellType == "Activated"] )
+rlnh_rest_RMC <- foverlaps(Robson_LADs_vs_Nups_RMCs[LAD_type == "Resting RMC"],nups[cellType == "Resting"] )
+
+# ok now to get something useful out of all of this
+plot5 <- rbind(rlnh_act,rlnh_rest,rlnh_act_RMC,rlnh_rest_RMC)
+plot5[,hasIntegration:=ifelse(!is.na(sample),"Integration","No integration")]
+plot5 <- plot5[!group%in%c("Resting_mock","Activated_mock"), ]
+
+p5 <- ggplot(plot5
+, aes(x=isLAD, fill = hasIntegration)) + 
+  geom_bar(position  ="fill")+
+  scale_fill_brewer(palette="Blues", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+ facet_wrap(~LAD_type)+
+  labs(x = "",
+       y = "Percent of genes with 1 or more HIV integrations",
+       fill = "",
+       title = "Nup genes with integration split by Robson LAD status")+theme_minimal()
+p5
+plot5[is.na(group), group := "No integration"]
+
+p6 <- ggplot(plot5
+, aes(x=isLAD, fill = group)) + 
+  geom_bar(position  ="fill")+
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+ facet_wrap(~LAD_type)+
+  labs(x = "",
+       y = "Percent of genes with 1 or more HIV integrations",
+       fill = "",
+       title = "Nup genes with integration split by Robson LAD status")+theme_minimal()
+p6
+
+
+# do also the total count as well?
+
+plot5[
+  , count_in_subgroup := .N, by = .(ensembl_gene_id, group, LAD_type)
+]
+
+p7 <- ggplot(plot5[hasIntegration =="Integration",]
+, aes(y = count_in_subgroup,x=isLAD, fill = group)) + 
+  geom_boxplot()+
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+ facet_wrap(~LAD_type)+
+  labs(x = "",
+       y = "Number of recurrent integrations in gene",
+       fill = "",
+       title = "Nup genes with recurrent integration split by Robson LAD status")+theme_minimal()
+p7
+
+# consider the Intron exon split
+p8 <- ggplot(plot5[,]
+, aes(y = log(pct_exon+1),x=LAD_type, fill = group)) + 
+  geom_boxplot()+
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+ #facet_wrap(~LAD_type)+
+  labs(x = "",
+       y = "log(Percent of exonal integrations+1)",
+       fill = "",
+       title = "Exonal integration percentage split by Robson LAD status")+theme_minimal()
+p8
+
+```
+
+\newpage
+
+# Belmont SPIN clasification vs Nup genes
+
+4 nup genes have no overlap with the Belmont Spin classifiction
+"CISD1"       "FAM74A2"     "INTS4L2"     "ANKRD20A14P"
+
+Comparison to randomly selected genes shows avoidance of Speckles and first two interior active compartments.
+
+```{r,echo = FALSE, results = FALSE}
+setkey(ngenes,chromosome_name,start,end)
+tots19$spin_start <- tots19$start
+tots19$spin_end <- tots19$end
+setkey(tots19,seqnames,spin_start,spin_end)
+spinups <- foverlaps(ngenes,tots19) # SPIN vs Nup enes
+sum(is.na(spinups$spin)) #750 are not classed
+spinups[is.na(spin),spin := "No SPIN overlap"]
+#sum(is.na(spinups$start))
+#sum(!ngenes$ensembl_gene_id %in% spinups$ensembl_gene_id)
+# the missing genes:
+#unique(ngenes[which(!ngenes$ensembl_gene_id %in% spinups$ensembl_gene_id),]$ensembl_gene_id)
+# so we have almost full coverage in Belmont as well
+
+spinups[, overlap_len := pmin(end, spin_end) - pmax(start, spin_start) + 1]
+# define overlap feature starts and stops
+spinups[,over_start := pmax(start, spin_start)][,over_end := pmin(end, spin_end)]
+spinups[,lad_width := spin_end - spin_start +1]
+spinups[,feature_width := end - start +1]
+spinups[,gene_width := end_position- start_position +1] # this is with TSS, so differs from SUM of features here!!!
+
+spinups[, bp_over_lad := sum(overlap_len), by=c("ensembl_gene_id","feature_type")]
+
+#RMCS
+genes_rand <- genes[sample(1:nrow(genes), length(unique(nupgenes$ensembl_gene_id)))]
+
+atts <- c( "ensembl_gene_id",
+            "start_position",
+            "end_position",
+            "ensembl_transcript_id",
+            "ensembl_exon_id",
+            "exon_chrom_start",
+            "exon_chrom_end",
+            "chromosome_name")
+genes_rand <- getBM(attributes = atts, mart = mart,filters = c("ensembl_gene_id"),
+                                                values=unique(genes_rand$ensembl_gene_id))
+genes_rand <- as.data.table(genes_rand)
+genes_rand <- introner(genes_rand)
+genes_rand[,chromosome_name := paste0("chr",chromosome_name)]
+setkey(genes_rand,chromosome_name,start_position,end_position)
+genes_rand <- foverlaps(genes_rand,tots19)
+
+sum(is.na(genes_rand$spin)) #750 are not classed
+genes_rand[is.na(spin),spin := "No SPIN overlap"]
+
+genes_rand[, overlap_len := pmin(end, spin_end) - pmax(start, spin_start) + 1]
+genes_rand[,over_start := pmax(start, spin_start)][,over_end := pmin(end, spin_end)]
+
+genes_rand[,lad_width := spin_end - spin_start +1]
+genes_rand[,feature_width := end - start +1]
+genes_rand[,gene_width := end_position- start_position +1] # this is with TSS, so differs from SUM of features here!!!
+
+genes_rand[, bp_over_lad := sum(overlap_len), by=c("ensembl_gene_id","feature_type")]
+
+genes_rand$type <- "RMC"
+spinups$type <- "Nup gene"
+
+spin_total <- rbind(spinups,genes_rand)
+```
+
+
+
+
+
+```{r,echo = FALSE}
+# graphing any of this somehow
+p9 <- ggplot(spinups[spin!="No SPIN overlap",]
+, aes(fill=spin, x=spin, y= overlap_len)) + 
+  geom_col()+ theme_minimal()+
+  #geom_text(stat = "count", aes(label = ..count..),
+   #         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+  labs(x = "",
+       y = "",
+       fill = "",
+       title = "Total length of overlap SPIN segments vs Nup genes") +theme(legend.position = "none")
+p9
+
+
+
+# wight this by total width of each SPIN classification
+spinups[,adjusted_overlap := overlap_len / sum(lad_width), by = c("spin","ensembl_gene_id") ]
+#spinups[,testing := sum(lad_width), by = c("spin","ensembl_gene_id") ]
+
+
+p10 <- ggplot(spinups[spin!="No SPIN overlap",]
+, aes(fill=spin, x=spin, y= adjusted_overlap)) + 
+  geom_col()+ theme_minimal()+
+  #geom_text(stat = "count", aes(label = ..count..),
+   #         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=0.5))+
+  labs(x = "",
+       y = "",
+       fill = "",
+       title = "SPIN/Nup overlap adjusted by SPIN class size") +theme(legend.position = "none")
+p10
+
+
+p11 <- ggplot(spin_total[spin!="No SPIN overlap",]
+, aes(fill=spin, x=spin, y= overlap_len)) + 
+  geom_col()+ theme_minimal()+facet_wrap(~type)+
+  #geom_text(stat = "count", aes(label = ..count..),
+   #         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  labs(x = "",
+       y = "",
+       fill = "",
+       title = "Total length of overlap SPIN segments vs Nup genes / RMCs") +theme(legend.position = "none")
+p11
+
+
+spin_total[,adjusted_overlap := overlap_len / sum(lad_width), by = c("spin","ensembl_gene_id","type") ]
+
+
+p12 <- ggplot(spin_total[spin!="No SPIN overlap",]
+, aes(fill=spin, x=spin, y= adjusted_overlap)) + 
+  geom_col()+ theme_minimal()+facet_wrap(~type)+
+  #geom_text(stat = "count", aes(label = ..count..),
+   #         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  labs(x = "",
+       y = "",
+       fill = "",
+       title = "SPIN/Nup-RMC overlap adjusted by SPIN class size") +theme(legend.position = "none")
+p12
+
+```
+
+\newpage
+
+### Checking if theres any additional integration preference here
+
+KO153 remarkable lack of Interior Act 3 compared to others?
+
+```{r, echo = FALSE}
+spin_total2 <- unique(spin_total[,c(1,12,19,27,28,33)])
+# this is 958 genes, so RMCs and Nup genes
+# remove NAs
+spin_total2 <- spin_total2[!is.na(over_start),]
+setkey(spin_total2, chromosome_name, over_start, over_end)
+# just the genic nups needed
+nups2 <- nups[ensembl_gene_id != "Not in gene",]
+setkey(nups2,chr_name,integration_start, integration_end)
+
+
+spinints <- foverlaps(spin_total2,nups2)
+spinints <- spinints[!group %in% c("Resting_mock","Activated_mock"),]
+spinints[is.na(group),group := "No integration"]
+
+#spinints <- spinints[!is.na(ensembl_gene_id),]
+p13 <- ggplot(spinints[spin!="No SPIN overlap",]
+, aes(fill=spin, x=spin)) + 
+  geom_bar()+ theme_minimal()+facet_grid(rows = vars(type), cols= vars(group))+
+  #geom_text(stat = "count", aes(label = ..count..),
+   #         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  #theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  theme(axis.text.x = element_blank())+
+  labs(x = "",
+       y = "",
+       fill = "",
+       title = "Integrations vs Nup gene SPIN classes")# +theme(legend.position = "none")
+p13
+
+
+
+
+```
+
+# fixing the final graph
+
+```{r, echo = FALSE, results = FALSE}
+
+spinints <- spinints[!ensembl_gene_id == "Not in gene",]
+# grab non integrating ones or lose them when dealing with mismatches
+noints <- spinints[group == "No integration",]
+spinints <- spinints[ensembl_gene_id !=i.ensembl_gene_id ,]
+spinints <- rbind(spinints,noints)
+
+p14 <- ggplot(spinints[spin!="No SPIN overlap" & type != "RMC",]
+, aes(fill=spin, x=spin)) + 
+  geom_bar()+ theme_minimal()+facet_wrap(~group)+
+  #geom_text(stat = "count", aes(label = ..count..),
+   #         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  #theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  theme(axis.text.x = element_blank())+
+  labs(x = "",
+       y = "Number of integrations",
+       fill = "",
+       title = "Integrations in Nup genes vs SPIN classes")# +theme(legend.position = "none")
+
+p14
+
+p15 <- ggplot(spinints[spin!="No SPIN overlap" & type == "RMC",]
+, aes(fill=spin, x=spin)) + 
+  geom_bar()+ theme_minimal()+facet_wrap(~group)+
+  #geom_text(stat = "count", aes(label = ..count..),
+   #         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  #theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  theme(axis.text.x = element_blank())+
+  labs(x = "",
+       y = "Number of integrations",
+       fill = "",
+       title = "Integrations in RMC genes vs SPIN classes")# +theme(legend.position = "none")
+
+p15
+
+p16 <- ggplot(spinints[spin!="No SPIN overlap" & type != "RMC",]
+, aes(fill=spin, x=spin)) + 
+  geom_bar()+ theme_minimal()+facet_wrap(~group,scales = "free_y")+
+  #geom_text(stat = "count", aes(label = ..count..),
+   #         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  #theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  theme(axis.text.x = element_blank())+
+  labs(x = "",
+       y = "Number of integrations",
+       fill = "",
+       title = "Integrations in Nup genes vs SPIN classes")# +theme(legend.position = "none")
+
+p16
+
+p17 <- ggplot(spinints[spin!="No SPIN overlap" & type == "RMC",]
+, aes(fill=spin, x=spin)) + 
+  geom_bar()+ theme_minimal()+facet_wrap(~group,scales = "free_y")+
+  #geom_text(stat = "count", aes(label = ..count..),
+   #         vjust = -0.3,position = position_stack(reverse = TRUE,vjust = 1)) +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  #theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  theme(axis.text.x = element_blank())+
+  labs(x = "",
+       y = "Number of integrations",
+       fill = "",
+       title = "Integrations in RMC genes vs SPIN classes")# +theme(legend.position = "none")
+
+p17
+
+# publish the fixed graphs + previpous request
+
+pdf("SPIN_Integrations_v3.pdf", height=6, width=8)
+p14
+p15
+p16
+p17
+dev.off()
+
+# there is some confusion between the two gene columns due to overlapping genes,
+# for example ENSG00000116641 and ENSG00000132855
+
+#saity check to see if 1654 of the 11754 resting NTs really do fall into nup genes
+nrow(nups[group == "Resting_NT" & ensembl_gene_id != "Not in gene",])
+length(unique(nups[group == "Resting_NT" & ensembl_gene_id != "Not in gene",]$ensembl_gene_id))
+
+sum(unique(nups[group == "Resting_NT" & ensembl_gene_id != "Not in gene",]$ensembl_gene_id) %in% unique(ngenes$ensembl_gene_id))
+
+length(unique(spinints[group == "Resting_NT" & type == "Nup gene",]$i.ensembl_gene_id))
+sum(unique(spinints[group == "Resting_NT" & type == "Nup gene",]$i.ensembl_gene_id) %in% nupgenes$ensembl_gene_id)
+# solved
+
+
+# checking again
+table(spinints[spin!="No SPIN overlap" & type != "RMC",]$group,spinints[spin!="No SPIN overlap" & type != "RMC",]$spin )
+
+length(unique(spinints[spin!="No SPIN overlap" & type != "RMC" & group == "Resting_NT",]$i.ensembl_gene_id))
+# so 268 genes have integrations here
+#check if this pans out for Resting_NT specifically
+ngenes2 <- unique(ngenes[,c(1,5,3,4)])
+setkey(ngenes2,chromosome_name,start_position, end_position)
+nups3 <- nups[group =="Resting_NT",]
+setkey(nups3, chr_name, integration_start, integration_end)
+
+test <- foverlaps(nups3,ngenes2)
+test <- test[!is.na(ensembl_gene_id),]
+length(unique(test$ensembl_gene_id))
+length(unique(test$uid))
+
+test3 <- test3[!ensembl_gene_id == "Not in gene",]
+test3 <- test3[!ensembl_gene_id !=i.ensembl_gene_id]
+```
+
+Messing about with LADs in 10% length segments,
+with +/1 50% off the ends to see if theres structural length based differences
+
+
+```{r, echo = FALSE}
+
+# isolate both types of lads lads
+
+rlads <- lads[LAD_binary == "LAD",][,c(2,3,4,8,9)] 
+blads <- tots19[,c(1,2,3,4,12,13)]  # lets just keep the whle thing for this one for now
+rlads[,width:=loc.end - loc.start +1]
+colnames(rlads) <- c("chr","start1","end1","isLAD","cellType","width")
+colnames(blads) <- c("chr","start1","end1","width","spin","isLAD")
+
+
+# gnerate segments
+
+
+rlads[, w10 := width / 10]
+blads[, w10 := width / 10]
+
+
+offsets <- data.table(
+  segment = c(paste0("lead_seg", 1:5),
+              paste0("seg", 1:10),
+              paste0("trail_seg", 1:5)),
+  rel_start = c(-5:-1, 0:9, 10:14),
+  rel_end   = c(-4:0, 1:10, 11:15)
+)
+
+new_rlads <- rlads[, {
+  orig_start <- start1   # preserve original start
+  tmp <- copy(offsets)
+  tmp[, start := orig_start + rel_start * w10]
+  tmp[, end   := orig_start + rel_end   * w10]
+  tmp
+}, by = .(chr, start1, end1, width, w10, cellType)][
+  , c("rel_start","rel_end","w10") := NULL]
+
+new_blads <- blads[, {
+  orig_start <- start1   # preserve original start
+  tmp <- copy(offsets)
+  
+  tmp[, start := orig_start + rel_start * w10]
+  tmp[, end   := orig_start + rel_end   * w10]
+  tmp
+}, by = .(chr, start1, end1, width,w10,spin)][
+  , c("rel_start","rel_end","w10") := NULL]
+
+# here we messed up since some of Belmonts are on starts of chromosomes
+new_blads <- new_blads[start>0,]
+
+
+
+library(BSgenome.Hsapiens.UCSC.hg19)
+# fix the chromosomal boundry conditions
+seqlens <- seqlengths(BSgenome.Hsapiens.UCSC.hg19)
+
+chr_lengths <- data.table(
+  chr = names(seqlens),
+  chr_len = as.numeric(seqlens)
+)
+
+new_rlads <- chr_lengths[new_rlads, on = "chr"]
+new_blads <- chr_lengths[new_blads, on = "chr"]
+new_rlads[, `:=`(
+  start = pmax(1, start),
+  end   = pmin(chr_len, end)
+)]
+new_rlads <- new_rlads[start < end]
+
+new_blads[, `:=`(
+  start = pmax(1, start),
+  end   = pmin(chr_len, end)
+)]
+new_blads <- new_blads[start < end]
+
+gr1 <- GRanges(
+  seqnames = new_rlads$chr,
+  ranges   = IRanges(start = new_rlads$start,
+                      end   = new_rlads$end)
+)
+
+gr2 <- GRanges(
+  seqnames = new_blads$chr,
+  ranges   = IRanges(start = new_blads$start,
+                      end   = new_blads$end)
+)
+
+seqs1 <- getSeq(BSgenome.Hsapiens.UCSC.hg19, gr1)
+seqs2 <- getSeq(BSgenome.Hsapiens.UCSC.hg19, gr2)
+
+gc1 <- letterFrequency(seqs1, letters = c("G", "C"), as.prob = TRUE)
+gc_content1 <- rowSums(gc1)
+
+gc2 <- letterFrequency(seqs2, letters = c("G", "C"), as.prob = TRUE)
+gc_content2 <- rowSums(gc2)
+
+new_rlads[, GC := gc_content1]
+new_blads[, GC := gc_content2]
+
+saveRDS(new_rlads,"Segmentated_Robson_LADS.rds")
+saveRDS(new_blads,"Segmentated_Belmont_LADS.rds")
+```
+
+
+Since Im separating LADs into percentage based segemnts heres their width distribution:
+Theyre pretty uniform so dont worry about it lol
+
+```{r,echo = FALSE}
+
+new_rlads <- readRDS("Segmentated_Robson_LADS.rds")
+new_blads <- readRDS("Segmentated_Belmont_LADS.rds")
+lads[,width:= loc.end -loc.start +1]
+ggplot(lads, aes(x = width)) +
+  geom_histogram() 
+
+ggplot(tots19, aes(x = width)) +
+  geom_histogram() 
+
+# whatever make the graphs silly billy
+
+head(new_rlads)
+setkey(new_rlads,chr,start,end)
+setkey(new_blads,chr,start,end,cellType)
+#mus tsplit
+nra <- new_rlads[cellType == "Activated",]
+nrr <- new_rlads[cellType == "Resting",]
+
+setkey(nups,chr_name,integration_start,integration_end)
+nra <- foverlaps(nra,nups[cellType =="Activated",])
+nrr <- foverlaps(nrr,nups[cellType =="Resting",])
+new_rlads <- rbind(nra,nrr)
+rm(nra,nrr)
+new_rlads <- new_rlads[!is.na(group),]
+
+new_blads <- foverlaps(new_blads,nups)
+
+# filter jsut integrating ones
+
+new_blads <- new_blads[!is.na(group),]
+
+# plot the Rlads
+
+p16 <- ggplot(new_rlads[group %in% c("Activated_KO153","Activated_NT"),], aes(color = group,x = segment, y = GC)) +
+  geom_point(alpha = 0.7, size = 1.5, position = "jitter") +# facet_w
+  theme_classic() +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  labs(
+    x = "Relative Position (10% of segment width increments)",
+    y = "GC Content",
+    title = "GC content across relative Robson LAD position"
+)
+p16
+
+# this is probably problematic as some of these overlap other LADS, making a bad image of it all:
+  # work on it more!!!!
+  # also rather meaningles without comared to RMC integrations
+
+
+head(new_rlads)
+
+```
+
+
+using modified ngenes table ( without transcript data) to show how they select into 
+various spin categories
+
+
+```{r}
+#saveRDS(ngenes,"nup_genes.rds")
+ngenes <- readRDS("nup_genes.rds")
+head(ngenes)
+ngenes[,chromosome_name:= paste0("chr",chromosome_name)]
+setkey(ngenes,chromosome_name,start_position, end_position)
+# ok now cross match to 
+tots19$spin_start <- tots19$start
+tots19$spin_end <- tots19$end
+setkey(tots19,seqnames,spin_start,spin_end)
+
+nl <- foverlaps(ngenes,tots19)
+
+nl <- nl[,c(1,12,17,18,19,22)]
+
+n2 <- nl[nl[, .(n_grp1 = uniqueN(spin)), by = ensembl_gene_id][n_grp1 == 3],
+   on = "ensembl_gene_id"]
+
+n2 <- unique(n2[,c(1,2,5,6)])
+n3 <- unique(nl[,c(1,2,5,6)])
+
+
+write.csv(nl,"Nup_spin_full.csv")
+write.csv(n3,"Nup_spin_shortened.csv")
+write.csv(n2,"Nup_spin_unique.csv")
+
+
+part1 <- nl[, .(grp1_set = unique(spin)), by = ensembl_gene_id][
+  , .(
+      only_in_subset = all(grp1_set %in% c("Lamina","Near_Lm1","Near_Lm2"))
+    ), 
+  by = ensembl_gene_id
+][only_in_subset == TRUE,ensembl_gene_id]
+part11 <- nl[ensembl_gene_id %in% part1,]
+part11 <- unique(part11[,c(5,6)])
+part11[,spin:="Lamina related"]
+
+part2 <- nl[, .(grp1_set = unique(spin)), by = ensembl_gene_id][
+  , .(
+      only_in_subset = all(grp1_set %in% c("Interior_Act3"))
+    ), 
+  by = ensembl_gene_id
+][only_in_subset == TRUE,ensembl_gene_id]
+part22 <- nl[ensembl_gene_id %in% part2,]
+part22 <- unique(part22[,c(5,6)])
+part22[,spin:="Interior_Act3"]
+
+nl3 <- rbind(part11,part22)
+write.csv(nl3,"Nup_spin_lamina_vs_act3.csv")
+```
