@@ -37,8 +37,8 @@ atts <- c(  "ensembl_gene_id",
             "exon_chrom_start",
             "exon_chrom_end",
             "chromosome_name")
-ngenes <- getBM(attributes = atts, mart = mart,filters = c("ensembl_gene_id"),
-                                                values=unique(nupgenes$ensembl_gene_id))
+ngenes <- getBM(attributes = atts, mart = mart)#,filters = c("ensembl_gene_id"),
+                                               # values=unique(nupgenes$ensembl_gene_id))
 ngenes <- as.data.table(ngenes)
 
 #  compute introsm
@@ -832,7 +832,7 @@ ggplot(tots19, aes(x = width)) +
 
 head(new_rlads)
 setkey(new_rlads,chr,start,end)
-setkey(new_blads,chr,start,end,cellType)
+setkey(new_blads,chr,start,end)
 #mus tsplit
 nra <- new_rlads[cellType == "Activated",]
 nrr <- new_rlads[cellType == "Resting",]
@@ -850,13 +850,50 @@ new_blads <- foverlaps(new_blads,nups)
 
 new_blads <- new_blads[!is.na(group),]
 
+
+# some of these will overlap (msot ofthen the plus and minus segments will go over the core segment of a neighbouring LAD)
+# removing those here as thats just not infromative 
+
+# More memory-efficient: find overlaps between different segment types
+overlapping_indices <- c()
+
+# doing this several times for different groups/tables
+segment_types <- unique(new_blads[spin %in% c("Lamina","Near_Lm1","Near_Lm2"),]$segment)
+
+for (i in seq_along(segment_types)) {
+  for (j in seq_along(segment_types)) {
+    if (i != j) {
+      seg_i <- new_blads[spin %in% c("Lamina","Near_Lm1","Near_Lm2"),][segment == segment_types[i], ]
+      seg_j <- new_blads[spin %in% c("Lamina","Near_Lm1","Near_Lm2"),][segment == segment_types[j], ]
+      
+      if (nrow(seg_i) > 0 & nrow(seg_j) > 0) {
+        setkey(seg_i, chr, start, end)
+        setkey(seg_j, chr, start, end)
+        overlaps <- foverlaps(seg_i, seg_j, which = TRUE)
+        
+        if (!is.na(overlaps[1,1])) {
+          overlapping_indices <- c(overlapping_indices, overlaps$xid, overlaps$yid)
+        }
+      }
+    }
+  }
+}
+
+
+overlapping_indices <- unique(overlapping_indices)
+overlapping_indices <- overlapping_indices[!is.na(overlapping_indices)]
+new_blads_filtered <- new_blads[spin %in% c("Lamina","Near_Lm1","Near_Lm2"),][-overlapping_indices, ]
+saveRDS(new_blads_filtered,"Segmentated_belmont_Laminadoms_Filtered.rds")
+#saveRDS(new_rlads_filtered,"Segmentated_Robson_LADS_Filtered.rds")
+
 # plot the Rlads
 
-p16 <- ggplot(new_rlads[group %in% c("Activated_KO153","Activated_NT"),], aes(color = group,x = segment, y = GC)) +
+p16 <- ggplot(new_rlads_filtered[group %in% c("Activated_KO153"),], aes(color = group,x = segment, y = GC)) +
   geom_point(alpha = 0.7, size = 1.5, position = "jitter") +# facet_w
   theme_classic() +
   scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  scale_x_discrete(limits = c(paste0("lead_seg", 1:5), paste0("seg", 1:10), paste0("trail_seg", 1:5)))+
   labs(
     x = "Relative Position (10% of segment width increments)",
     y = "GC Content",
@@ -864,12 +901,19 @@ p16 <- ggplot(new_rlads[group %in% c("Activated_KO153","Activated_NT"),], aes(co
 )
 p16
 
-# this is probably problematic as some of these overlap other LADS, making a bad image of it all:
-  # work on it more!!!!
-  # also rather meaningles without comared to RMC integrations
-
-
-head(new_rlads)
+p17 <- ggplot(new_blads_filtered[], aes(color = group,x = segment, y = GC)) +
+  #geom_point(alpha = 0.7, size = 1.5, position = "jitter") +# facet_w
+  geom_boxplot()+
+  theme_classic() +
+  theme(axis.ticks.y = element_blank())+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))+
+  #scale_x_discrete(limits = c(paste0("lead_seg", 1:5), paste0("seg", 1:10), paste0("trail_seg", 1:5)))+
+  labs(
+    x = "Relative Position (10% of segment width increments)",
+    y = "GC Content",
+    title = "GC content across relative Belmont position"
+)
+p17
 
 ```
 
@@ -927,4 +971,722 @@ part22[,spin:="Interior_Act3"]
 
 nl3 <- rbind(part11,part22)
 write.csv(nl3,"Nup_spin_lamina_vs_act3.csv")
+```
+
+see what about our gene expression?
+
+
+```{r}
+# we need our expression data from somewhere
+# and she wants it in TPM and last time i just saved the varnormcounts so doover
+
+# load in the raw counts
+CD4 <- fread("C:/Users/38598/Desktop/hivint/GSE122735_SupplementaryCountsTableRNAseq.txt")
+genes <- CD4$ORF
+CD4 <- CD4[,-"ORF"]
+rownames(CD4) <- genes
+head(CD4,2)
+
+#Create a custom coldata tableu
+treatment <- c("JQ1","CTRL","JQ1","CTRL","JQ1","CTRL","JQ1","CTRL","JQ1","CTRL","JQ1","CTRL")
+type <- c("activated","activated","activated","resting","resting","resting","resting","resting","resting","activated","activated","activated")
+group <- paste(treatment,type, sep  ="_")
+
+# filter jsut for nup genes
+CD4 <- CD4[rownames(CD4)%in% ngenes$ensembl_gene_id,]
+# filter just the control
+CD4 <- CD4[,c(2,4,6,8,10,12)]
+rownames(CD4) <- genes[genes %in%ngenes$ensembl_gene_id ]
+
+# get nupgene lengths
+# not just start to stop since were dealing with expression
+# use the "big" table that has exons as well
+
+head(ngenes)
+
+gr <- GRanges(
+  seqnames = paste0("chr",ngenes$chromosome_name), # placeholder if chromosome not fetched
+  ranges = IRanges(
+    start = ngenes$exon_chrom_start,
+    end   = ngenes$exon_chrom_end
+  ),
+  gene = ngenes$ensembl_gene_id
+)
+
+exons_by_gene <- split(gr, gr$gene)
+
+gene_lengths <- sapply(exons_by_gene, function(g) {
+  sum(width(reduce(g)))
+})
+
+gene_lengths <- gene_lengths[rownames(CD4)]  # order it same as CD4 table
+
+length_kb <- gene_lengths / 1000
+rpk <- CD4 / length_kb
+
+tpm <- t(t(rpk) / colSums(rpk)) * 1e6
+
+# form new table
+dtpm <- data.table(gene_name = rownames(CD4),
+                    tpm_resting = rowMeans(tpm[,c(2,3,4)]),
+                    tpm_activated =rowMeans(tpm[,c(1,5,6)]) )
+```
+
+
+fill in the tables, makes some graphs
+
+
+```{r}
+# we have full coverage in expression, might as well celebrate
+nl <- merge(nl, dtpm, by.x = "ensembl_gene_id", by.y = "gene_name", all.x = T)
+n3 <- merge(n3, dtpm, by.x = "ensembl_gene_id", by.y = "gene_name", all.x = T)
+n2 <- merge(n2, dtpm, by.x = "ensembl_gene_id", by.y = "gene_name", all.x = T)
+nl3<- merge(nl3, dtpm, by.x = "ensembl_gene_id", by.y = "gene_name", all.x = T)
+
+# publish
+write.csv(nl,"Nup_spin_full_exp.csv")
+write.csv(n3,"Nup_spin_shortened_exp.csv")
+write.csv(n2,"Nup_spin_unique_exp.csv")
+write.csv(nl3,"Nup_spin_lamina_vs_act3_exp.csv")
+```
+
+graph it
+
+
+```{r}
+n3[is.na(spin),spin:="No spin overlap"]
+p1 <- ggplot(n3, aes(x = spin, y = tpm_resting+1,fill = spin)) +
+  geom_violin() +
+  geom_jitter(width = 0.1, size = 1) +
+  scale_y_continuous(trans = "log2") +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme_minimal()+ylab("log2(tpm_resting+1)")+ggtitle("Nup_spin_shortened_resting")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
+p1
+
+p2 <- ggplot(n3, aes(x = spin, y = tpm_activated+1,fill = spin)) +
+  geom_violin() +
+  geom_jitter(width = 0.1, size = 1) +
+  scale_y_continuous(trans = "log2") +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme_minimal()+ylab("log2(tpm_activated+1)")+ggtitle("Nup_spin_shortened_activated")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
+p2
+
+n2[is.na(spin),spin:="No spin overlap"]
+p3 <- ggplot(n2, aes(x = spin, y = tpm_resting+1,fill = spin)) +
+  geom_violin() +
+  geom_jitter(width = 0.1, size = 1) +
+  scale_y_continuous(trans = "log2") +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme_minimal()+ylab("log2(tpm_resting+1)")+ggtitle("Nup_spin_unique_resting")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
+p3
+
+p4 <- ggplot(n2, aes(x = spin, y = tpm_activated+1,fill = spin)) +
+  geom_violin() +
+  geom_jitter(width = 0.1, size = 1) +
+  scale_y_continuous(trans = "log2") +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme_minimal()+ylab("log2(tpm_activated+1)")+ggtitle("Nup_spin_unique_activated")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
+p4
+
+
+nl3[is.na(spin),spin:="No spin overlap"]
+p5 <- ggplot(nl3, aes(x = spin, y = tpm_resting+1,fill = spin)) +
+  geom_violin() +
+  geom_jitter(width = 0.1, size = 1) +
+  scale_y_continuous(trans = "log2") +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme_minimal()+ylab("log2(tpm_resting+1)")+ggtitle("Nup_spin_unique_resting")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
+p5
+
+p6 <- ggplot(nl3, aes(x = spin, y = tpm_activated+1,fill = spin)) +
+  geom_violin() +
+  geom_jitter(width = 0.1, size = 1) +
+  scale_y_continuous(trans = "log2") +
+  scale_fill_brewer(palette="RdBu", direction = 1)+ theme(axis.ticks.y = element_blank())+
+  theme_minimal()+ylab("log2(tpm_activated+1)")+ggtitle("Nup_spin_unique_activated")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.8, hjust=0.5))
+p6
+
+
+pdf("Nup_spin_violin_expressions.pdf", height=6, width=8)
+p1
+p2
+p3
+p4
+p5
+p6
+dev.off()
+```
+
+
+Figuting out PACS1 relation to the SPIN classes.
+its ENSG00000175115
+
+```{r}
+PACS1 <- genes[ensembl_gene_id == "ENSG00000175115",]
+setkey(PACS1,chromosome_name,start_position,end_position)
+
+# Get PACS1 overlaps with SPIN classes
+PACS1 <- genes[ensembl_gene_id == "ENSG00000175115",]
+setkey(PACS1, chromosome_name, start_position, end_position)
+pacs1_spin <- foverlaps(PACS1, tots19)
+
+# Get PACS1 exons and introns
+# get only the cannonical transript exons to avoid the mess of multiple transcripts
+pacs1_exons <- ngenes[ensembl_gene_id == "ENSG00000175115" & ensembl_transcript_id =="ENST00000320580",
+                      .(chromosome_name, exon_chrom_start, exon_chrom_end)]
+pacs1_exons <- unique(pacs1_exons)
+pacs1_exons[, type := "Exon"]
+
+# Get introns by finding gaps between exons
+pacs1_exons <- pacs1_exons[order(exon_chrom_start)]
+if(nrow(pacs1_exons) > 1) {
+  introns <- pacs1_exons[1:(.N-1), 
+                         .(chromosome_name = chromosome_name,
+                           exon_chrom_start = exon_chrom_end + 1,
+                           exon_chrom_end = data.table::shift(exon_chrom_start, -1) - 1,
+                           type = "Intron")]
+  introns <- introns[!is.na(exon_chrom_end)]
+  pacs1_structure <- rbind(pacs1_exons, introns)
+  pacs1_structure <- pacs1_structure[order(exon_chrom_start)]
+} else {
+  pacs1_structure <- pacs1_exons
+}
+
+# Get HIV integrations in PACS1 region
+setkey(nups, chr_name, integration_start, integration_end)
+pacs1_nups <- foverlaps(PACS1, nups)
+pacs1_nups <- pacs1_nups[!is.na(group),]  # Keep only those with integration info
+
+# Create visualization
+p_pacs1 <- ggplot() +
+  # Gene body as background
+  #geom_rect(data = PACS1, 
+  #          aes(xmin = start_position, xmax = end_position, 
+  #              ymin = 0.4, ymax = 0.6, fill = "Gene body"),
+  #          color = "black", linewidth = 0.5, alpha = 0.2) +
+  
+  # Exons and introns
+  geom_rect(data = pacs1_structure,
+            aes(xmin = exon_chrom_start, xmax = exon_chrom_end,
+                ymin = 0.8, ymax = 1.2, fill = type),
+            color = "black", linewidth = 0.3, alpha = 0.9) +
+  
+  # SPIN segments
+  geom_rect(data = pacs1_spin,
+            aes(xmin = pmax(start_position, start), 
+                xmax = pmin(end_position, end),
+                ymin = 1.8, ymax = 2.2, fill = spin),
+            color = "black", linewidth = 0.5, alpha = 0.8) +
+  
+  # HIV integrations as points
+  geom_point(data = pacs1_nups, position = position_jitter(width = 0, height = 0.15),
+             aes(x = integration_start, y = 3, color = group),
+             size = 3, alpha = 0.7) +
+  
+  scale_fill_manual(
+    values = c(#"Gene body" = "#cccccc",
+               "Exon" = "#1f77b4",
+               "Intron" = "#ffffff",
+               "Lamina" = "#d73027",
+               "Near_Lm1" = "#fc8d59",
+               "Near_Lm2" = "#fee090",
+               "Interior_Act1" = "#e0f3f8",
+               "Interior_Act2" = "#91bfdb",
+               "Interior_Act3" = "#4575b4",
+               "Speckle" = "#ffffbf"),
+    name = "Feature",
+    na.value = "grey50"
+  ) +
+  scale_color_manual(
+    values = c("Activated_NT" = "#d73027", "Activated_KO62" = "#fee090",
+               "Activated_KO153" = "#e0f3f8", "Resting_NT" = "#4575b4",
+               "Resting_KO62" = "#ffffbf", "Resting_KO153" = "#91bfdb"),
+    name = "HIV Integration Group"
+  ) +
+  
+  scale_y_continuous(breaks = c( 1, 2, 3), 
+                     labels = c("PACS1", "SPIN Class", "Integrations"),
+                     limits = c(0, 3.5)) +
+  
+  scale_x_continuous(labels = scales::comma) +
+  
+  theme_minimal() +
+  labs(title = "PACS1",
+       x = "Genomic",
+       y = "") +
+  theme(axis.text.y = element_text(size = 10, face = "bold"),
+        legend.position = "bottom",
+        legend.box = "horizont",
+        legend.margin = margin(t = 10, unit = "pt"),
+        plot.margin = margin(t = 5, r = 5, b = 40, l = 5, unit = "pt"),
+        panel.grid = element_blank())
+
+p_pacs1
+```
+
+publish
+
+```{r}
+pdf("pacs1.pdf", height=6, width=10)
+p_pacs1
+dev.off()
+```
+
+Seeing if thers a connect to the STP integrations
+
+
+```{r}
+stp <- fread("C:/Users/38598/Desktop/hivint/newSTP/HIV1_IS_new_data.bed")
+# ok those are the ones
+
+stp[, `:=`(
+  V6_clean = sub("_$", "", V6),
+  sample_type = sub("_S[0-9]+_?$", "", V6),
+  sample_group = sub("_[0-9]+h.*", "", V6),
+  hour_marking = gsub(".*_([0-9]+h).*", "\\1", V6)
+)]
+
+
+# Convert stp to GRanges
+stp_gr <- GRanges(
+  seqnames = stp$V1,
+  ranges = IRanges(stp$V2, stp$V3),
+  stp_info = stp[, .(sample_type, sample_group, hour_marking)]
+)
+
+# Convert tots19 to GRanges
+tots19_gr <- GRanges(
+  seqnames = tots19$seqnames,
+  ranges = IRanges(tots19$start, tots19$end),
+  spin = tots19$spin,
+  lads = tots19$lads
+)
+
+# Find overlaps
+overlaps <- findOverlaps(stp_gr, tots19_gr)
+stp_overlapped <- stp_gr[queryHits(overlaps)]
+tots19_overlapped <- tots19_gr[subjectHits(overlaps)]
+
+# Create result table
+overlap_result <- data.table(
+  stp_chr = as.character(seqnames(stp_overlapped)),
+  stp_start = start(stp_overlapped),
+  stp_end = end(stp_overlapped),
+  sample_type = stp_overlapped$stp_info.sample_type,
+  sample_group = stp_overlapped$stp_info.sample_group,
+  hour_marking = stp_overlapped$stp_info.hour_marking,
+  tots19_spin = tots19_overlapped$spin,
+  tots19_lads = tots19_overlapped$lads
+)
+
+head(overlap_result, 10)
+
+# add RMCs?
+set.seed(1234)
+n_random <- nrow(stp)
+
+# Sample random chromosomes (weighted by their prevalence in stp data)
+chr_freq <- table(stp$V1)
+random_chrs <- sample(names(chr_freq), n_random, replace = TRUE, prob = chr_freq)
+
+# Sample random positions within reasonable ranges for each chromosome
+random_starts <- integer(n_random)
+for (i in seq_along(random_chrs)) {
+  chr <- random_chrs[i]
+  # Get max position from tots19 for this chromosome
+  max_pos <- max(tots19[seqnames == chr]$end, na.rm = TRUE)
+  random_starts[i] <- sample(1:max(max_pos - 1000, 1), 1)
+}
+
+random_ends <- random_starts + sample(100:1000, n_random, replace = TRUE)
+
+# Create GRanges for random sites
+rmc_gr <- GRanges(
+  seqnames = random_chrs,
+  ranges = IRanges(random_starts, random_ends)
+)
+
+# Find overlaps with tots19
+overlaps_rmc <- findOverlaps(rmc_gr, tots19_gr)
+rmc_overlapped <- rmc_gr[queryHits(overlaps_rmc)]
+tots19_overlapped_rmc <- tots19_gr[subjectHits(overlaps_rmc)]
+
+# Create result table for random sites
+rmc_result <- data.table(
+  stp_chr = as.character(seqnames(rmc_overlapped)),
+  stp_start = start(rmc_overlapped),
+  stp_end = end(rmc_overlapped),
+  sample_type = "RMC",
+  sample_group = "RMC",
+  hour_marking = NA_character_,
+  tots19_spin = tots19_overlapped_rmc$spin,
+  tots19_lads = tots19_overlapped_rmc$lads
+)
+
+# Combine with existing overlap_result
+overlap_result_combined <- rbind(overlap_result, rmc_result)
+
+```
+
+
+```{r}
+p1 <- ggplot(overlap_result_combined[sample_group!="mock",], aes(x = sample_type, fill = tots19_spin)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "",
+    x = "",
+    y = "Proportion",
+    fill = "Spin Class"
+  ) +
+  theme_minimal() + scale_fill_brewer(palette="RdBu", direction = 1)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p1
+p2 <- ggplot(overlap_result_combined[sample_group!="mock",], aes(x = sample_group, fill = tots19_spin)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "",
+    x = "",
+    y = "Proportion",
+    fill = "Spin Class"
+  ) +
+  theme_minimal() + scale_fill_brewer(palette="RdBu", direction = 1)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2
+# is this significant with regards to how smol it is?
+# chisquare test shouldnt care
+
+chisq.test(table(overlap_result[sample_group!="mock",]$sample_type, overlap_result[sample_group!="mock",]$tots19_spin))
+chisq.test(table(overlap_result[sample_group!="mock",]$sample_group, overlap_result[sample_group!="mock",]$tots19_spin))
+
+```
+
+
+Get CTCF binding sites
+
+
+```{r}
+library(AnnotationHub)
+
+ah <- AnnotationHub()
+ctcf_datasets <- query(ah, c("CTCF", "Homo sapiens", "hg18"))
+
+# View available datasets
+ctcf_datasets
+
+ctcf_gr <- ah[["AH104741"]]  # Example ID - check your results first
+
+# Convert GRanges to data.table
+ctcf_dt <- as.data.table(ctcf_gr)
+```
+
+publish
+
+```{r}
+pdf("STP_spin.pdf", height=6, width=10)
+p1
+p2
+dev.off()
+```
+
+# load the rloop data and check for the spin 
+
+
+```{r}
+rloops <- fread("C:/Users/38598/Desktop/hivint/peakCalling/ConsensusPeaksFromTriplicates.txt", header = F)
+rloops <- makeGRangesFromDataFrame(rloops, keep.extra.columns = TRUE, start.field = "V2", end.field = "V3", seqnames.field = "V1")
+rdt <- as.data.table(rloops)
+
+
+# Find overlaps
+overlaps_rloops <- findOverlaps(rloops, tots19_gr)
+rloops_overlapped <- rloops[queryHits(overlaps_rloops)]
+tots19_overlapped_rloops <- tots19_gr[subjectHits(overlaps_rloops)]
+
+# Create result table
+rloops_spin_overlap <- data.table(
+  rloop_chr = as.character(seqnames(rloops_overlapped)),
+  rloop_start = start(rloops_overlapped),
+  rloop_end = end(rloops_overlapped),
+  rloop_V4 = rloops_overlapped$V4,
+  rloop_V5 = rloops_overlapped$V5,
+  rloop_V6 = rloops_overlapped$V6,
+  tots19_spin = tots19_overlapped_rloops$spin,
+  tots19_lads = tots19_overlapped_rloops$lads
+)
+
+head(rloops_spin_overlap, 10)
+```
+
+# first the plot
+
+```{r}
+rloops_spin_summary <- rloops_spin_overlap[, .(count = .N), by = tots19_spin]
+rloops_spin_summary[, proportion := count / sum(count)]
+
+p_rloops_spin <- ggplot(rloops_spin_summary, aes(x = tots19_spin, y = proportion, fill = tots19_spin)) +
+  geom_col() +
+  scale_fill_brewer(palette = "RdBu", direction = 1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.ticks.y = element_blank(),
+        legend.position = "none") +
+  labs(
+    title = "",
+    x = "",
+    y = "Proportion of R-loops in SPIN segment",
+    fill = ""
+  )
+
+p_rloops_spin
+```
+
+# comapre to random sites?
+
+```{r}
+# Generate random sites matching R-loop distribution
+set.seed(1234)
+n_random_rloops <- nrow(rdt)
+
+# Sample random chromosomes (weighted by their prevalence in rdt data)
+chr_freq_rloops <- table(rdt$seqnames)
+random_chrs_rloops <- sample(names(chr_freq_rloops), n_random_rloops, replace = TRUE, prob = chr_freq_rloops)
+
+# Sample random positions within reasonable ranges for each chromosome
+random_starts_rloops <- integer(n_random_rloops)
+for (i in seq_along(random_chrs_rloops)) {
+  chr <- random_chrs_rloops[i]
+  max_pos <- max(tots19[seqnames == chr]$end, na.rm = TRUE)
+  random_starts_rloops[i] <- sample(1:max(max_pos - 1000, 1), 1)
+}
+
+random_ends_rloops <- random_starts_rloops + sample(100:1000, n_random_rloops, replace = TRUE)
+
+# Create GRanges for random rloop-like sites
+random_rloop_gr <- GRanges(
+  seqnames = random_chrs_rloops,
+  ranges = IRanges(random_starts_rloops, random_ends_rloops)
+)
+
+# Find overlaps with tots19
+overlaps_random_rloops <- findOverlaps(random_rloop_gr, tots19_gr)
+random_rloop_overlapped <- random_rloop_gr[queryHits(overlaps_random_rloops)]
+tots19_overlapped_random_rloops <- tots19_gr[subjectHits(overlaps_random_rloops)]
+
+# Create result table for random sites
+random_rloop_spin_overlap <- data.table(
+  site_chr = as.character(seqnames(random_rloop_overlapped)),
+  site_start = start(random_rloop_overlapped),
+  site_end = end(random_rloop_overlapped),
+  tots19_spin = tots19_overlapped_random_rloops$spin,
+  site_type = "Random"
+)
+
+# Add label to actual rloops
+rloops_spin_overlap[, site_type := "R-loops"]
+
+# Combine both datasets
+combined_spin_comparison <- rbind(
+  rloops_spin_overlap[, .(tots19_spin, site_type)],
+  random_rloop_spin_overlap[, .(tots19_spin, site_type)]
+)
+
+# Calculate proportions
+comparison_summary <- combined_spin_comparison[, .(count = .N), by = .(site_type, tots19_spin)]
+comparison_summary[, proportion := count / sum(count), by = site_type]
+
+# Plot comparison
+p_rloops_vs_random <- ggplot(comparison_summary, aes(x = tots19_spin, y = proportion, fill = site_type)) +
+  geom_col(position = "dodge") +
+  scale_fill_brewer(palette = "Blues", direction = -1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.ticks.y = element_blank(),
+        legend.position = "right") +
+  labs(
+    title = "",
+    x = "",
+    y = "Proportion of R-loops in SPIN segment",
+    fill = ""
+  )
+
+p_rloops_vs_random
+```
+
+Figure out if any combination of rloops/integrations is more likely to be in a certain spin class than expected by chance
+
+
+```{r}
+rloops_spin_overlap[, row_id := .I]
+setkey(rloops_spin_overlap, rloop_chr,rloop_start,rloop_end)
+
+rloops_spin_ints <- foverlaps(rloops_spin_overlap, nups)
+nrow(rloops_spin_ints)
+#we get more rows since some rloops overlap multiple integrations
+sum(is.na(rloops_spin_ints$group)) # but most of them do have integrations
+rloops_spin_ints[is.na(group),group:="No integration"]
+rloops_spin_ints[is.na(group),sample:="No integration"]
+
+p_rloops_integration <- ggplot(rloops_spin_ints[!group %in% c("mock", "Activated_mock")], aes(x = group, fill = tots19_spin)) +
+  geom_bar(position = "fill") +
+  scale_x_discrete(limits = c("No integration", "Activated_NT", "Resting_NT", 
+                               "Activated_KO62", "Activated_KO153", 
+                               "Resting_KO62", "Resting_KO153")) +
+  labs(
+    title = "R-loops with and without HIV integrations across SPIN classes",
+    x = "",
+    y = "Proportion",
+    fill = "SPIN Class"
+  ) +
+  theme_minimal() + scale_fill_brewer(palette="RdBu", direction = 1)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p_rloops_integration
+```
+
+# Compare with random HIV integrations
+
+```{r}
+# Create random HIV integrations matching rloops distribution
+set.seed(1234)
+n_random_nups <- nrow(rloops_spin_overlap)
+
+# Sample random chromosomes (weighted by their prevalence in rloops)
+chr_freq_rloops <- table(rloops_spin_overlap$rloop_chr)
+random_nup_chrs <- sample(names(chr_freq_rloops), n_random_nups, replace = TRUE, prob = chr_freq_rloops)
+
+# Sample random positions within reasonable ranges for each chromosome
+random_nup_starts <- integer(n_random_nups)
+for (i in seq_along(random_nup_chrs)) {
+  chr <- random_nup_chrs[i]
+  max_pos <- max(rloops_spin_overlap[rloop_chr == chr]$rloop_end, na.rm = TRUE)
+  random_nup_starts[i] <- sample(1:max(max_pos - 1000, 1), 1)
+}
+
+random_nup_ends <- random_nup_starts + sample(100:500, n_random_nups, replace = TRUE)
+
+# Create GRanges for random nups
+random_nups_gr <- GRanges(
+  seqnames = random_nup_chrs,
+  ranges = IRanges(random_nup_starts, random_nup_ends)
+)
+
+# Convert rloops to GRanges for overlap
+rloops_gr <- GRanges(
+  seqnames = rloops_spin_overlap$rloop_chr,
+  ranges = IRanges(rloops_spin_overlap$rloop_start, rloops_spin_overlap$rloop_end)
+)
+
+# Find overlaps
+overlaps_random_nups <- findOverlaps(rloops_gr, random_nups_gr)
+
+# Create combined dataset with real and random integrations
+rloops_combined <- rloops_spin_ints[!group %in% c("mock", "Activated_mock"), .(group, tots19_spin)]
+rloops_combined[, integration_type := "Real"]
+
+# Add random integrations
+random_rows <- length(unique(queryHits(overlaps_random_nups)))
+random_integration_data <- data.table(
+  group = rep("RMCs", random_rows),
+  tots19_spin = rloops_spin_overlap[unique(queryHits(overlaps_random_nups)), tots19_spin],
+  integration_type = "Random"
+)
+
+rloops_combined_full <- rbind(rloops_combined, random_integration_data)
+
+# Plot comparison
+p_rloops_integration_vs_random <- ggplot(rloops_combined_full, aes(x = group, fill = tots19_spin)) +
+  geom_bar(position = "fill") +
+  scale_x_discrete(limits = c("No integration", "Activated_NT", "Resting_NT", 
+                               "Activated_KO62", "Activated_KO153", 
+                               "Resting_KO62", "Resting_KO153", "RMCs")) +
+  labs(
+    title = "R-loops with real vs random HIV integrations",
+    x = "Integration Group",
+    y = "Proportion",
+    fill = "SPIN Class"
+  ) +
+  theme_minimal() + scale_fill_brewer(palette="RdBu", direction = 1)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p_rloops_integration_vs_random
+```
+
+Count integrations per R-loop
+
+```{r}
+# Count how many integrations are in each specific rloop
+integration_count <- rloops_spin_ints[, .(n_integrations = .N), by = row_id]
+
+# Merge back to get the rloop info
+rloops_with_count <- rloops_spin_overlap[integration_count, on = "row_id"]
+
+# Summary statistics
+integration_count_summary <- integration_count[, .(
+  count = .N,
+  mean = mean(n_integrations),
+  median = median(n_integrations),
+  max = max(n_integrations)
+), by = .(n_integrations)]
+
+integration_count_summary
+
+# Plot distribution
+p_integration_count <- ggplot(integration_count, aes(x = n_integrations)) +
+  geom_bar(fill = "#4575b4", color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of repeated integrations",
+    x = "Number of integrations in R-loop",
+    y = "Number of R-loops"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p_integration_count
+```
+
+Faceted plot: SPIN state vs repeated integrations
+
+```{r}
+# Create integration count categories
+integration_count[, int_category := fifelse(n_integrations == 1, "1",
+                                              fifelse(n_integrations == 2, "2",
+                                                      fifelse(n_integrations == 3, "3", "4+")))]
+integration_count[n_integrations >= 4, int_category := "4+"]
+
+# Merge integration count info back to rloops_spin_overlap
+rloops_with_int_cat <- rloops_spin_overlap[integration_count[, .(row_id, int_category)], 
+                                            on = "row_id"]
+
+# Create faceted plot
+p_spin_vs_repeated <- ggplot(rloops_with_int_cat, aes(x = tots19_spin, fill = tots19_spin)) +
+  geom_bar() +
+  facet_wrap(~int_category, scales = "free_y") +
+  scale_fill_brewer(palette = "RdBu", direction = 1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        strip.text = element_text(face = "bold")) +
+  labs(
+    title = "R-loops by SPIN state and repeated HIV integration count",
+    x = "SPIN Class",
+    y = "Count of R-loops",
+    fill = "SPIN Class"
+  )
+p_spin_vs_repeated
+```
+
+Publish all these plots in pdf
+
+
+```{r}
+pdf("Rloops_SPIN_analysis.pdf", height=8, width=10)
+p_rloops_spin
+p_rloops_vs_random
+p_rloops_integration
+p_rloops_integration_vs_random
+p_integration_count
+p_spin_vs_repeated
+dev.off()
 ```

@@ -605,8 +605,10 @@ ggplot(over[!group%in%c("Resting_mock","Resting_KO153","Activated_mock","Activat
 ### Same as above but added RMCs (GC cov only for spacing reasons. Generally look the same) If plot doesent specify experimental samples that means mock and KO153 are excluded:
 
 ```{r, echo = FALSE}
-# get all the expressioin data
+# get all the expression data
 normalized_counts <- read.csv("C:/Users/38598/Desktop/hivint/nup153/Nup_62_2/cd4ACTvsREST_VSTcounts.csv")
+# data for upregulation/downregulation
+ex2 <- readRDS("C:/Users/38598/Desktop/hivint/nup153/differential_expression_full.rds")
 
 # good now we have all genes, intersect this with LADS and genic integrations
 # First split by Act/Rest, then paste back together
