@@ -1334,7 +1334,7 @@ overlap_result_combined <- rbind(overlap_result, rmc_result)
 
 ```
 
-
+plot
 ```{r}
 p1 <- ggplot(overlap_result_combined[sample_group!="mock",], aes(x = sample_type, fill = tots19_spin)) +
   geom_bar(position = "fill") +
@@ -1688,5 +1688,308 @@ p_rloops_integration
 p_rloops_integration_vs_random
 p_integration_count
 p_spin_vs_repeated
+dev.off()
+```
+
+
+Redoing the plots in Marquis et al orientation
+
+
+```{r}
+# Convert nups and tots19 to GRanges for overlap analysis
+nups_gr <- GRanges(
+  seqnames = nups$chr_name,
+  ranges = IRanges(start = nups$integration_start, end = nups$integration_end),
+  mcols = nups[, .(group, sample, cellType)]
+)
+
+tots19_gr <- GRanges(
+  seqnames = tots19$seqnames,
+  ranges = IRanges(start = tots19$start, end = tots19$end),
+  mcols = tots19[, .(spin)]
+)
+
+# Find overlaps between integration sites and SPIN segments
+overlaps <- findOverlaps(nups_gr, tots19_gr, type = "any")
+
+# Create result table with integration and SPIN segment info
+overlap_results <- data.table(
+  integration_idx = queryHits(overlaps),
+  spin_idx = subjectHits(overlaps)
+)
+
+# Add group and spin information
+overlap_results[, group := nups_gr$mcols.group[integration_idx]]
+overlap_results[, spin := tots19_gr$mcols.spin[spin_idx]]
+
+# Calculate count of integrations per SPIN segment by group
+spin_integration_summary <- overlap_results[
+  !is.na(spin),
+  .(count = .N),
+  by = .(spin, group)
+]
+
+# Get total integrations per group
+group_totals <- overlap_results[
+  !is.na(spin),
+  .(total = .N),
+  by = group
+]
+
+# Calculate proportions within each group
+spin_proportions <- spin_integration_summary[
+  group_totals,
+  on = "group",
+  proportion := count / total
+]
+
+# Create plot
+p1 <- ggplot(spin_proportions[!group %in% c("Resting_mock","Activated_mock"),], aes(x = spin, y = proportion, fill = spin)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~ group, nrow = 2) +
+  scale_fill_brewer(palette = "RdBu", direction = 1) +
+  labs(
+    title = "Proportion of HIV Integrations by SPIN Segment",
+    x = "SPIN Segment",
+    y = "Proportion of Integrations",
+    fill = "Integration Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p1
+
+pdf("All_ints_SPIN_rotated.pdf", height=8, width=10)
+p1
+dev.off()
+```
+
+
+Seeing if the Wang et al SPIn segments are different
+
+
+```{r}
+library(easylift)
+# first chech their K562 Lamin data to see (expect 85% match?)
+#blads <- fread("belmont_data/belmont_lads.bed")
+#blads[,width:=V3-V2]
+#colnames(blads) <- c("chrom","start","end","width")
+chain_file <- "hg38ToHg19.over.chain"
+chain <- import.chain(chain_file)
+#use ucsc to lift over as well?
+blads2 <- fread("K562_SPIN_25kb_hg38_202001.bed")
+blads2[,width:=V3-V2]
+colnames(blads2) <- c("chrom","start","end","SPIN","width")
+
+# separate our target cells
+
+# save this as .bed
+
+blads2$index <- 1:nrow(blads2)  # get a unique ide to handle multi
+tot_gr <- makeGRangesFromDataFrame(blads2, keep.extra.columns = TRUE)
+genome(tot_gr) <- "38"
+gr_hg19 <- easylift(tot_gr,
+                    to = "hg19",
+                    chain = "hg38ToHg19.over.chain")
+
+tots19_2 <- as.data.table(gr_hg19)
+# keep the widestm multi aligns
+tots19_2 <- tots19_2 %>%
+  group_by(index) %>%
+  slice_max(width) %>%
+  as.data.table()
+
+setkey(tots19_2,seqnames, start,end)
+saveRDS(tots19_2, "tots19_2.rds")
+```
+
+# reusing both datasets with the STP integrations to see if the SPIN segments are different
+
+
+```{r}
+
+
+
+# overlap_results taking from above fro mthe STP cell
+# Calculate count of integrations per SPIN segment by group
+spin_integration_summary <- overlap_result[
+  !is.na(tots19_spin),
+  .(count = .N),
+  by = .(tots19_spin, sample_type)
+]
+
+# Get total integrations per group
+group_totals <- overlap_result[
+  !is.na(tots19_spin),
+  .(total = .N),
+  by = sample_type
+]
+
+# Calculate proportions within each group
+spin_proportions <- spin_integration_summary[
+  group_totals,
+  on = "sample_type",
+  proportion := count / total
+]
+
+# Create plot
+p1 <- ggplot(spin_proportions[!sample_type %in% c("mock_24h","mock_72h"),], aes(x = tots19_spin, y = proportion, fill = tots19_spin)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~ sample_type, nrow = 3) +
+  scale_fill_brewer(palette = "RdBu", direction = 1) +
+  labs(
+    title = "HIV integrations vs Belmont SPIN",
+    x = "SPIN Segment",
+    y = "Proportion of Integrations",
+    fill = "Integration Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p1
+
+
+```
+
+
+Ok now comapred to the 24k data from Wang et al
+        is this the same data or the same wang?
+```{r}
+tots19_gr2 <- GRanges(
+  seqnames = tots19_2$seqnames,
+  ranges = IRanges(tots19_2$start, tots19_2$end),
+  spin = tots19_2$spin
+)
+
+# Find overlaps
+overlaps <- findOverlaps(stp_gr, tots19_gr2)
+stp_overlapped <- stp_gr[queryHits(overlaps)]
+tots19_overlapped <- tots19_gr2[subjectHits(overlaps)]
+
+# Create result table
+overlap_result_2 <- data.table(
+  stp_chr = as.character(seqnames(stp_overlapped)),
+  stp_start = start(stp_overlapped),
+  stp_end = end(stp_overlapped),
+  sample_type = stp_overlapped$stp_info.sample_type,
+  sample_group = stp_overlapped$stp_info.sample_group,
+  hour_marking = stp_overlapped$stp_info.hour_marking,
+  tots19_spin = tots19_overlapped$spin
+)
+
+
+spin_integration_summary <- overlap_result_2[
+  !is.na(tots19_spin),
+  .(count = .N),
+  by = .(tots19_spin, sample_type)
+]
+
+# Get total integrations per group
+group_totals <- overlap_result_2[
+  !is.na(tots19_spin),
+  .(total = .N),
+  by = sample_type
+]
+
+# Calculate proportions within each group
+spin_proportions <- spin_integration_summary[
+  group_totals,
+  on = "sample_type",
+  proportion := count / total
+]
+
+# Create plot
+p2 <- ggplot(spin_proportions[!sample_type %in% c("mock_24h","mock_72h"),], aes(x = tots19_spin, y = proportion, fill = tots19_spin)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~ sample_type, nrow = 3) +
+  scale_fill_brewer(palette = "RdBu", direction = 1) +
+  labs(
+    title = "Vs Wang et al SPIN segments",
+    x = "SPIN Segment",
+    y = "Proportion of Integrations",
+    fill = "Integration Group"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2
+```
+
+This is weird why is wang so much sparser, is it mislabeled? its deff not 25k as its supposed to be
+
+```{r}
+
+# Convert to GRanges
+tots19_gr <- GRanges(
+  seqnames = tots19$seqnames,
+  ranges = IRanges(start = tots19$start, end = tots19$end),
+  spin = tots19$spin,
+  cell = tots19$cell.name
+)
+
+tots19_2_gr <- GRanges(
+  seqnames = tots19_2$seqnames,
+  ranges = IRanges(start = tots19_2$start, end = tots19_2$end),
+  SPIN = tots19_2$SPIN
+)
+
+# Find overlaps: which tots19 regions overlap with tots19_2 regions
+overlaps_query <- findOverlaps(tots19_gr, tots19_2_gr, type = "any")
+
+# Which tots19_2 regions overlap with tots19 regions
+overlaps_subject <- findOverlaps(tots19_2_gr, tots19_gr, type = "any")
+
+# Create result table showing overlap details
+overlap_result <- data.table(
+  tots19_idx = queryHits(overlaps_query),
+  tots19_2_idx = subjectHits(overlaps_query)
+)
+
+# Add information from both tables
+overlap_result[, `:=`(
+  tots19_seqname = tots19_gr$seqnames[tots19_idx],
+  tots19_start = start(tots19_gr)[tots19_idx],
+  tots19_end = end(tots19_gr)[tots19_idx],
+  tots19_spin = tots19_gr$spin[tots19_idx],
+  
+  tots19_2_seqname = tots19_2_gr$seqnames[tots19_2_idx],
+  tots19_2_start = start(tots19_2_gr)[tots19_2_idx],
+  tots19_2_end = end(tots19_2_gr)[tots19_2_idx],
+  tots19_2_SPIN = tots19_2_gr$SPIN[tots19_2_idx]
+)]
+
+# Check SPIN annotation agreement
+overlap_result[, spin_match := tots19_spin == tots19_2_SPIN]
+
+# Summary statistics
+cat("=== OVERLAP SUMMARY ===\n")
+cat("Total tots19 regions:", nrow(tots19), "\n")
+cat("Total tots19_2 regions:", nrow(tots19_2), "\n")
+cat("tots19 regions overlapping with tots19_2:", length(unique(overlap_result$tots19_idx)), "\n")
+cat("tots19_2 regions overlapping with tots19:", length(unique(overlap_result$tots19_2_idx)), "\n\n")
+
+pct_tots19_overlap <- (length(unique(overlap_result$tots19_idx)) / nrow(tots19)) * 100
+pct_tots19_2_overlap <- (length(unique(overlap_result$tots19_2_idx)) / nrow(tots19_2)) * 100
+
+cat("Percentage of tots19 covered by tots19_2:", round(pct_tots19_overlap, 2), "%\n")
+cat("Percentage of tots19_2 covered by tots19:", round(pct_tots19_2_overlap, 2), "%\n\n")
+
+# SPIN segment agreement
+cat("=== SPIN SEGMENT AGREEMENT ===\n")
+cat("Total overlapping pairs:", nrow(overlap_result), "\n")
+cat("Matching SPIN segments:", sum(overlap_result$spin_match), "\n")
+cat("Non-matching SPIN segments:", sum(!overlap_result$spin_match), "\n")
+cat("Percentage agreement:", round((sum(overlap_result$spin_match) / nrow(overlap_result)) * 100, 2), "%\n\n")
+
+# Show distribution of SPIN segment mismatches
+cat("=== SPIN MISMATCH DETAILS ===\n")
+mismatch_dist <- overlap_result[spin_match == FALSE, .N, by = .(tots19_spin, tots19_2_SPIN)]
+head(mismatch_dist[order(-N)], 10)
+
+```
+
+now its 79%
+
+```{r}
+pdf("STP_ints_SPIN_rotated_belmont_wang.pdf", height=8, width=10)
+p1
+p2
 dev.off()
 ```

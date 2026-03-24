@@ -7,7 +7,7 @@ output: pdf_document
 library(rtracklayer) # for loading .bw files
 library(data.table)
 library(ggplot2)
-    library(gridExtra)
+library(gridExtra)
 library(dplyr)
 library(stats)
 library(mixtools)  # jesus all this for bimodal middle estimation.....

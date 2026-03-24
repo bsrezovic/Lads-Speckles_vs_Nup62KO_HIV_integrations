@@ -1,0 +1,89 @@
+---
+title: "Lads vs Nups"
+output: pdf_document
+---
+
+```{r,setup,echo=F, message=FALSE, warning=FALSE}
+library(GenomicRanges)
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+# load the data points
+
+# STP integrations
+stp <- fread("C:/Users/38598/Desktop/hivint/newSTP/HIV1_IS_new_data.bed")
+stp[, `:=`(
+  V6_clean = sub("_$", "", V6),
+  sample_type = sub("_S[0-9]+_?$", "", V6),
+  sample_group = sub("_[0-9]+h.*", "", V6),
+  hour_marking = gsub(".*_([0-9]+h).*", "\\1", V6)
+)]
+# add index to each
+stp$int_index <- 1:nrow(stp)
+# rloops
+rloops <- fread("C:/Users/38598/Desktop/hivint/peakCalling/ConsensusPeaksFromTriplicates.txt", header = F)
+rloops <- makeGRangesFromDataFrame(rloops, keep.extra.columns = TRUE, start.field = "V2", end.field = "V3", seqnames.field = "V1")
+# some of these are overlapping, lets reduce them
+rloops <- reduce(rloops)  # loss of around 800, good
+rdt <- as.data.table(rloops)
+rdt$isRloop <- "R-loop"
+rdt$r_index <- 1:nrow(rdt)
+# the damn SPIN data, this time in 25 k intervals since it should jus tbe better
+spin <- readRDS("tots19_2.rds")
+spin$spin_index <- 1:nrow(spin)
+```
+
+# Analyisis of integration patterns in regards to R-loops and speckles
+
+
+
+```{r, echo=F}
+# for starters lets just make a main table of SPIN segments since that should get near total coverage of the genome and annotate when there is or isnt a rloop or integration in it
+
+# lets first localize integrations to rloops, and then annotated that all with spin segments
+# also lets create RMCs for the STP integrations immediately and add to the RMC table
+setkey(stp, V1, V2, V3)
+setkey(rdt, seqnames, start, end)
+
+# so this is all rloops, annotated with some integrations
+sloop <- foverlaps(rdt,stp)
+# keep the non-rloop related ones as well
+pools <- foverlaps(stp, rdt, type = "any", nomatch = 0)
+stp_norloop <- stp[!pools, on = .(V1, V2, V3)]
+
+# combine this in one table, with a column for rloop presence and a column for integration presence, and then annotate that with SPIN segments
+stp_rloops <- rbindlist(list(
+  sloop,                      # dt1 + overlaps
+  stp_norloop               # dt2-only rows
+), fill = TRUE)
+
+# handle identifying columns for future analysis
+stp_rloops[, `:=`(
+  isRloop = ifelse(is.na(isRloop), "No R-loop", isRloop),
+  isIntegration = ifelse(is.na(V1), "No Integration", "Integration")
+)]
+
+# this hives us  43 "extra" integrations and a few hundo extra rloopls -FIXED
+# lets identify
+stp_rloops[!is.na(int_index), .SD[.N > 1], by = int_index]
+# okay these all seem to be caused by overlapping Rloops, lets remove those above and see if that fixes it DONE
+# how about the rloops
+nrow(stp_rloops[!is.na(r_index), .SD[.N > 1], by = r_index])
+# thats just the number of rloops with multipel integrations, so we're set
+
+
+# criss cross with the SPIN data
+setkey(spin,seqnames, start, end)
+# does this have self overlaps, ignoring those that touch etc..
+ov <- foverlaps(spin, spin, type = "any", nomatch = 0)[
+  spin_index < i.spin_index &                # remove self + duplicate pairs
+  start < i.end &            # strict overlap condition
+  end > i.start              # excludes touching
+]
+# for the integrations, just overlap spin with the integratio n location, for the rloops use spin
+stp_rloops_int <- stp_rloops[isIntegration == "Integration",]
+setkey(stp_rloops_int, V1, V2, V3)
+r1 <- foverlaps(stp_rloops_int, spin)
+r1[, .SD[.N > 1], by = int_index]
+```
